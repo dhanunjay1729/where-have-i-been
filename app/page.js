@@ -1,65 +1,101 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
+import DropZone from "./components/DropZone";
+import Sidebar from "./components/Sidebar";
+import { parseFile, calculateStats } from "./utils/fileParser";
+
+// Dynamically import MapView to avoid SSR issues with Leaflet
+const MapView = dynamic(() => import("./components/MapView"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-2 border-neon-cyan/20" />
+          <div
+            className="absolute inset-0 rounded-full border-2 border-transparent border-t-neon-cyan ring-spin"
+            style={{ animationDuration: "1s" }}
+          />
+        </div>
+        <span className="text-xs font-mono text-neon-cyan tracking-wider neon-pulse">
+          INITIALIZING MAP ENGINE...
+        </span>
+      </div>
+    </div>
+  ),
+});
 
 export default function Home() {
+  const [appState, setAppState] = useState("upload"); // "upload" | "transitioning" | "map"
+  const [geojson, setGeojson] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState(null);
+
+  const stats = useMemo(() => {
+    if (!geojson) return null;
+    return calculateStats(geojson);
+  }, [geojson]);
+
+  const handleFileLoaded = useCallback((name, content) => {
+    try {
+      const parsed = parseFile(name, content);
+
+      if (!parsed.features || parsed.features.length === 0) {
+        setError("No geographic features found in this file.");
+        return;
+      }
+
+      setGeojson(parsed);
+      setFileName(name);
+      setAppState("transitioning");
+
+      // Transition delay
+      setTimeout(() => {
+        setAppState("map");
+      }, 300);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setAppState("upload");
+    setGeojson(null);
+    setFileName("");
+    setError(null);
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="h-screen w-screen flex overflow-hidden relative">
+      {appState === "upload" && (
+        <div className="flex-1 flex flex-col">
+          <DropZone onFileLoaded={handleFileLoaded} />
+
+          {error && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
+              <div className="bg-red-900/40 border border-red-500/30 rounded-lg px-6 py-3 text-sm text-red-300 font-mono flex items-center gap-3 backdrop-blur-sm">
+                <span>⚠</span>
+                <span>{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-red-400 hover:text-red-200 transition-colors ml-2 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+
+      {(appState === "transitioning" || appState === "map") && (
+        <>
+          <Sidebar stats={stats} fileName={fileName} onReset={handleReset} />
+          <MapView geojson={geojson} stats={stats} />
+        </>
+      )}
+    </main>
   );
 }

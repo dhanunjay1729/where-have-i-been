@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Sample Hike</name>
+  </metadata>
+  <trk>
+    <name>Mountain Trail</name>
+    <trkseg>
+      <trkpt lat="37.7749" lon="-122.4194"><ele>10</ele><time>2025-06-01T08:00:00Z</time></trkpt>
+      <trkpt lat="37.7755" lon="-122.4180"><ele>25</ele><time>2025-06-01T08:10:00Z</time></trkpt>
+      <trkpt lat="37.7765" lon="-122.4170"><ele>50</ele><time>2025-06-01T08:20:00Z</time></trkpt>
+      <trkpt lat="37.7780" lon="-122.4155"><ele>80</ele><time>2025-06-01T08:35:00Z</time></trkpt>
+      <trkpt lat="37.7800" lon="-122.4140"><ele>120</ele><time>2025-06-01T08:50:00Z</time></trkpt>
+      <trkpt lat="37.7820" lon="-122.4120"><ele>160</ele><time>2025-06-01T09:05:00Z</time></trkpt>
+      <trkpt lat="37.7835" lon="-122.4100"><ele>200</ele><time>2025-06-01T09:20:00Z</time></trkpt>
+      <trkpt lat="37.7850" lon="-122.4085"><ele>250</ele><time>2025-06-01T09:40:00Z</time></trkpt>
+      <trkpt lat="37.7870" lon="-122.4065"><ele>300</ele><time>2025-06-01T10:00:00Z</time></trkpt>
+      <trkpt lat="37.7885" lon="-122.4050"><ele>320</ele><time>2025-06-01T10:15:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
