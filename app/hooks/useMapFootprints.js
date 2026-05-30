@@ -40,8 +40,10 @@ const ALL_SOURCES = [SOURCE_FOOTPRINTS, SOURCE_ROUTES];
  * @param {mapboxgl.Map|null} map       – the live Mapbox GL map instance
  * @param {object|null}       geojsonData – a GeoJSON FeatureCollection from our parser
  */
-export default function useMapFootprints(map, geojsonData) {
+export default function useMapFootprints(map, geojsonData, currentTime) {
   const layersAddedRef = useRef(false);
+  const fullDataRef = useRef({ points: null, lines: null });
+  const animationFrameRef = useRef(null);
 
   // ── Separate Point and LineString features ───────────────────────────────
   const splitFeatures = useCallback((geojson) => {
@@ -59,7 +61,6 @@ export default function useMapFootprints(map, geojsonData) {
       } else if (geom.type === "LineString") {
         lineFeatures.push(feature);
       } else if (geom.type === "MultiLineString") {
-        // Flatten each sub-line into its own LineString feature
         for (const coords of geom.coordinates) {
           lineFeatures.push({
             type: "Feature",
@@ -68,7 +69,6 @@ export default function useMapFootprints(map, geojsonData) {
           });
         }
       } else if (geom.type === "Polygon") {
-        // Treat polygon ring as a line for visualization
         lineFeatures.push({
           type: "Feature",
           geometry: { type: "LineString", coordinates: geom.coordinates[0] },
@@ -77,15 +77,36 @@ export default function useMapFootprints(map, geojsonData) {
       }
     }
 
-    const points =
-      pointFeatures.length > 0
-        ? { type: "FeatureCollection", features: pointFeatures }
-        : null;
+    // Process timestamps to numbers for fast filtering
+    const processTime = (features, isPoint) => {
+      return features.map(f => {
+        const timeStr = isPoint 
+          ? (f.properties.arrivalTimestamp || f.properties.timestamp || f.properties.time)
+          : (f.properties.startTimestamp || f.properties.timestamp || f.properties.time);
+        
+        let _timeMs = 0;
+        if (timeStr) {
+          const t = new Date(timeStr).getTime();
+          if (!isNaN(t)) _timeMs = t;
+        }
 
-    const lines =
-      lineFeatures.length > 0
-        ? { type: "FeatureCollection", features: lineFeatures }
-        : null;
+        return {
+          ...f,
+          properties: {
+            ...f.properties,
+            _timeMs
+          }
+        };
+      });
+    };
+
+    const points = pointFeatures.length > 0
+      ? { type: "FeatureCollection", features: processTime(pointFeatures, true) }
+      : null;
+
+    const lines = lineFeatures.length > 0
+      ? { type: "FeatureCollection", features: processTime(lineFeatures, false) }
+      : null;
 
     return { points, lines };
   }, []);
@@ -94,10 +115,7 @@ export default function useMapFootprints(map, geojsonData) {
   const calculateBounds = useCallback((geojson) => {
     if (!geojson?.features || geojson.features.length === 0) return null;
 
-    let minLng = Infinity;
-    let maxLng = -Infinity;
-    let minLat = Infinity;
-    let maxLat = -Infinity;
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
 
     const processCoord = (coord) => {
       const [lng, lat] = coord;
@@ -114,24 +132,17 @@ export default function useMapFootprints(map, geojsonData) {
       if (geom.type === "Point") {
         processCoord(geom.coordinates);
       } else if (geom.type === "LineString") {
-        for (const coord of geom.coordinates) {
-          processCoord(coord);
-        }
+        for (const coord of geom.coordinates) processCoord(coord);
       } else if (geom.type === "MultiLineString" || geom.type === "Polygon") {
         for (const ring of geom.coordinates) {
-          for (const coord of ring) {
-            processCoord(coord);
-          }
+          for (const coord of ring) processCoord(coord);
         }
       }
     }
 
     if (minLng === Infinity) return null;
 
-    return [
-      [minLng, minLat], // SW
-      [maxLng, maxLat], // NE
-    ];
+    return [[minLng, minLat], [maxLng, maxLat]];
   }, []);
 
   // ── Remove old layers & sources gracefully ───────────────────────────────
@@ -218,9 +229,10 @@ export default function useMapFootprints(map, geojsonData) {
           source: SOURCE_ROUTES,
           layout: { "line-join": "round", "line-cap": "round" },
           paint: {
-            "line-color": "rgba(0, 255, 245, 0.15)",
-            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 4, 10, 8, 15, 14],
-            "line-blur": 6,
+            "line-color": "#00fff5",
+            "line-width": 8,
+            "line-blur": 4,
+            "line-opacity": 0.5,
           },
         });
       }
@@ -233,13 +245,8 @@ export default function useMapFootprints(map, geojsonData) {
           source: SOURCE_ROUTES,
           layout: { "line-join": "round", "line-cap": "round" },
           paint: {
-            "line-color": [
-              "interpolate", ["linear"], ["zoom"],
-              2, "rgba(0, 255, 245, 0.5)",
-              8, "rgba(0, 255, 245, 0.75)",
-              14, "rgba(0, 255, 245, 0.9)",
-            ],
-            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 2, 15, 3.5],
+            "line-color": "#ffffff",
+            "line-width": 3,
           },
         });
       }
@@ -335,6 +342,7 @@ export default function useMapFootprints(map, geojsonData) {
 
     const inject = () => {
       const { points, lines } = splitFeatures(geojsonData);
+      fullDataRef.current = { points, lines };
 
       // Clean any existing layers/sources before re-adding
       cleanupLayers(map);
@@ -345,11 +353,7 @@ export default function useMapFootprints(map, geojsonData) {
       // ── Fly to bounding box ──────────────────────────────────────
       const bounds = calculateBounds(geojsonData);
       if (bounds) {
-        map.fitBounds(bounds, {
-          padding: 50,
-          duration: 2500,
-          essential: true,
-        });
+        map.fitBounds(bounds, { padding: 50, duration: 2500, essential: true });
       }
     };
 
@@ -362,11 +366,38 @@ export default function useMapFootprints(map, geojsonData) {
 
     // Cleanup on unmount or data change
     return () => {
-      if (map && map.getStyle()) {
-        cleanupLayers(map);
-      }
+      if (map && map.getStyle()) cleanupLayers(map);
     };
   }, [map, geojsonData, splitFeatures, calculateBounds, cleanupLayers, addLayers]);
+
+  // ── Timeline filtering effect ───────────────────────────────────────────
+  useEffect(() => {
+    if (!map || !layersAddedRef.current || !currentTime) return;
+
+    // Use requestAnimationFrame to throttle setData calls for smooth playback
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const { points, lines } = fullDataRef.current;
+
+      if (points && map.getSource(SOURCE_FOOTPRINTS)) {
+        const filteredPoints = {
+          type: "FeatureCollection",
+          features: points.features.filter(f => f.properties._timeMs <= currentTime)
+        };
+        map.getSource(SOURCE_FOOTPRINTS).setData(filteredPoints);
+      }
+
+      if (lines && map.getSource(SOURCE_ROUTES)) {
+        const filteredLines = {
+          type: "FeatureCollection",
+          features: lines.features.filter(f => f.properties._timeMs <= currentTime)
+        };
+        map.getSource(SOURCE_ROUTES).setData(filteredLines);
+      }
+    });
+
+  }, [currentTime, map]);
 
   // ── Handle cluster click → zoom into cluster ───────────────────────────
   useEffect(() => {
