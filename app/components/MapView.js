@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 import useMapFootprints from "../hooks/useMapFootprints";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,11 +40,20 @@ export default function MapView({ geojson, stats }) {
 
     map.on("style.load", () => {
       setMapReady(true);
+      // Force a resize once the style loads to ensure it fills the container
+      setTimeout(() => map.resize(), 100);
     });
+
+    // ResizeObserver ensures map fills the container even if flex dimensions change
+    const resizeObserver = new ResizeObserver(() => {
+      if (map) map.resize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
 
     mapInstanceRef.current = map;
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
       setMapReady(false);
@@ -56,9 +64,9 @@ export default function MapView({ geojson, stats }) {
   useMapFootprints(mapReady ? mapInstanceRef.current : null, geojson);
 
   return (
-    <div className="fade-scale-in flex-1 relative">
+    <div className="fade-scale-in flex-1 w-full h-full relative">
       {/* Map container */}
-      <div ref={mapContainerRef} className="absolute inset-0 z-0" />
+      <div ref={mapContainerRef} className="absolute inset-0 z-0 w-full h-full" />
 
       {/* Corner status indicator */}
       <div className="absolute top-3 left-3 z-10 pointer-events-none">

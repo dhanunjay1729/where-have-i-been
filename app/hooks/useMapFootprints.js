@@ -155,14 +155,10 @@ export default function useMapFootprints(map, geojsonData) {
   // ── Add all layers ──────────────────────────────────────────────────────
   const addLayers = useCallback(
     (mapInstance, pointsGeoJSON, linesGeoJSON) => {
-      // ────────────────────────────────────────────────────────────────────
-      // 1) POINT SOURCE (clustered) + HEATMAP + CLUSTER + UNCLUSTERED LAYERS
-      // ────────────────────────────────────────────────────────────────────
+      // 1) Ensure sources exist or are updated
       if (pointsGeoJSON) {
-        // Check if source already exists → update data; else create new
-        const existingSource = mapInstance.getSource(SOURCE_FOOTPRINTS);
-        if (existingSource) {
-          existingSource.setData(pointsGeoJSON);
+        if (mapInstance.getSource(SOURCE_FOOTPRINTS)) {
+          mapInstance.getSource(SOURCE_FOOTPRINTS).setData(pointsGeoJSON);
         } else {
           mapInstance.addSource(SOURCE_FOOTPRINTS, {
             type: "geojson",
@@ -172,239 +168,160 @@ export default function useMapFootprints(map, geojsonData) {
             clusterRadius: 50,
           });
         }
-
-        // ── Heatmap Layer ──────────────────────────────────────────────
-        // Neon color ramp: translucent blue → neon green → hot pink at dense nodes
-        if (!mapInstance.getLayer(LAYER_HEATMAP)) {
-          mapInstance.addLayer({
-            id: LAYER_HEATMAP,
-            type: "heatmap",
-            source: SOURCE_FOOTPRINTS,
-            filter: ["!", ["has", "point_count"]],
-            maxzoom: 15,
-            paint: {
-              // Increase weight based on density or a property
-              "heatmap-weight": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                0, 1,
-                15, 3,
-              ],
-              // Increase intensity as zoom level increases
-              "heatmap-intensity": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                0, 0.8,
-                15, 3,
-              ],
-              // Neon color ramp: transparent → blue → cyan → neon green → hot pink
-              "heatmap-color": [
-                "interpolate",
-                ["linear"],
-                ["heatmap-density"],
-                0,   "rgba(0, 0, 0, 0)",
-                0.1, "rgba(30, 0, 120, 0.4)",
-                0.25, "rgba(0, 100, 255, 0.6)",
-                0.4, "rgba(0, 255, 245, 0.7)",
-                0.6, "rgba(0, 255, 100, 0.8)",
-                0.8, "rgba(180, 0, 255, 0.9)",
-                1.0, "rgba(255, 0, 120, 1)",
-              ],
-              // Radius adjusts with zoom
-              "heatmap-radius": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                0, 8,
-                6, 20,
-                12, 35,
-                15, 50,
-              ],
-              // Opacity fades at higher zooms to reveal individual points
-              "heatmap-opacity": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                12, 0.9,
-                15, 0.3,
-              ],
-            },
-          });
-        }
-
-        // ── Clustered Circle Layer ────────────────────────────────────
-        if (!mapInstance.getLayer(LAYER_CLUSTER_CIRCLES)) {
-          mapInstance.addLayer({
-            id: LAYER_CLUSTER_CIRCLES,
-            type: "circle",
-            source: SOURCE_FOOTPRINTS,
-            filter: ["has", "point_count"],
-            paint: {
-              // Color clusters based on count: cyan → magenta → pink
-              "circle-color": [
-                "step",
-                ["get", "point_count"],
-                "rgba(0, 255, 245, 0.85)",  // < 25: neon cyan
-                25,
-                "rgba(180, 71, 255, 0.85)",  // 25-100: neon purple
-                100,
-                "rgba(255, 0, 255, 0.85)",   // 100-500: magenta
-                500,
-                "rgba(255, 61, 138, 0.9)",   // 500+: hot pink
-              ],
-              // Size scales with cluster count
-              "circle-radius": [
-                "step",
-                ["get", "point_count"],
-                16,   // base size
-                25, 22,
-                100, 28,
-                500, 36,
-              ],
-              "circle-stroke-width": 2,
-              "circle-stroke-color": "rgba(0, 0, 0, 0.4)",
-              // Subtle blur for glow effect
-              "circle-blur": 0.15,
-            },
-          });
-        }
-
-        // ── Cluster Count Label ──────────────────────────────────────
-        if (!mapInstance.getLayer(LAYER_CLUSTER_COUNT)) {
-          mapInstance.addLayer({
-            id: LAYER_CLUSTER_COUNT,
-            type: "symbol",
-            source: SOURCE_FOOTPRINTS,
-            filter: ["has", "point_count"],
-            layout: {
-              "text-field": ["get", "point_count_abbreviated"],
-              "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
-              "text-size": 12,
-              "text-allow-overlap": true,
-            },
-            paint: {
-              "text-color": "#ffffff",
-              "text-halo-color": "rgba(0, 0, 0, 0.5)",
-              "text-halo-width": 1,
-            },
-          });
-        }
-
-        // ── Unclustered Point Glow (outer ring) ─────────────────────
-        if (!mapInstance.getLayer(LAYER_UNCLUSTERED_GLOW)) {
-          mapInstance.addLayer({
-            id: LAYER_UNCLUSTERED_GLOW,
-            type: "circle",
-            source: SOURCE_FOOTPRINTS,
-            filter: ["!", ["has", "point_count"]],
-            minzoom: 12,
-            paint: {
-              "circle-radius": 8,
-              "circle-color": "rgba(255, 0, 255, 0.2)",
-              "circle-blur": 0.8,
-            },
-          });
-        }
-
-        // ── Unclustered Points (inner dot) ──────────────────────────
-        if (!mapInstance.getLayer(LAYER_UNCLUSTERED_POINT)) {
-          mapInstance.addLayer({
-            id: LAYER_UNCLUSTERED_POINT,
-            type: "circle",
-            source: SOURCE_FOOTPRINTS,
-            filter: ["!", ["has", "point_count"]],
-            minzoom: 12,
-            paint: {
-              "circle-radius": 4,
-              "circle-color": "#ff00ff",
-              "circle-stroke-width": 1.5,
-              "circle-stroke-color": "#0a0a0f",
-            },
-          });
-        }
       }
 
-      // ────────────────────────────────────────────────────────────────────
-      // 2) LINESTRING SOURCE + ROUTE LAYERS
-      // ────────────────────────────────────────────────────────────────────
       if (linesGeoJSON) {
-        const existingRouteSource = mapInstance.getSource(SOURCE_ROUTES);
-        if (existingRouteSource) {
-          existingRouteSource.setData(linesGeoJSON);
+        if (mapInstance.getSource(SOURCE_ROUTES)) {
+          mapInstance.getSource(SOURCE_ROUTES).setData(linesGeoJSON);
         } else {
           mapInstance.addSource(SOURCE_ROUTES, {
             type: "geojson",
             data: linesGeoJSON,
           });
         }
+      }
 
-        // ── Route Glow Layer (wider, blurred for neon glow) ─────────
-        if (!mapInstance.getLayer(LAYER_ROUTES_GLOW)) {
-          mapInstance.addLayer(
-            {
-              id: LAYER_ROUTES_GLOW,
-              type: "line",
-              source: SOURCE_ROUTES,
-              layout: {
-                "line-join": "round",
-                "line-cap": "round",
-              },
-              paint: {
-                "line-color": "rgba(0, 255, 245, 0.15)",
-                "line-width": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  4, 4,
-                  10, 8,
-                  15, 14,
-                ],
-                "line-blur": 6,
-              },
-            },
-            // Insert below heatmap if it exists
-            mapInstance.getLayer(LAYER_HEATMAP) ? LAYER_HEATMAP : undefined
-          );
-        }
+      // 2) Add layers in correct visual order (bottom to top)
+      
+      // Bottom layer: Heatmap
+      if (pointsGeoJSON && !mapInstance.getLayer(LAYER_HEATMAP)) {
+        mapInstance.addLayer({
+          id: LAYER_HEATMAP,
+          type: "heatmap",
+          source: SOURCE_FOOTPRINTS,
+          filter: ["!", ["has", "point_count"]],
+          maxzoom: 15,
+          paint: {
+            "heatmap-weight": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.8, 15, 3],
+            "heatmap-color": [
+              "interpolate", ["linear"], ["heatmap-density"],
+              0, "rgba(0, 0, 0, 0)",
+              0.1, "rgba(30, 0, 120, 0.4)",
+              0.25, "rgba(0, 100, 255, 0.6)",
+              0.4, "rgba(0, 255, 245, 0.7)",
+              0.6, "rgba(0, 255, 100, 0.8)",
+              0.8, "rgba(180, 0, 255, 0.9)",
+              1.0, "rgba(255, 0, 120, 1)",
+            ],
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 6, 20, 12, 35, 15, 50],
+            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.9, 15, 0.3],
+          },
+        });
+      }
 
-        // ── Route Line Layer (thin, crisp neon line) ────────────────
-        if (!mapInstance.getLayer(LAYER_ROUTES)) {
-          mapInstance.addLayer(
-            {
-              id: LAYER_ROUTES,
-              type: "line",
-              source: SOURCE_ROUTES,
-              layout: {
-                "line-join": "round",
-                "line-cap": "round",
-              },
-              paint: {
-                "line-color": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  2, "rgba(0, 255, 245, 0.5)",
-                  8, "rgba(0, 255, 245, 0.75)",
-                  14, "rgba(0, 255, 245, 0.9)",
-                ],
-                "line-width": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  4, 1,
-                  10, 2,
-                  15, 3.5,
-                ],
-              },
-            },
-            // Insert glow above the glow layer
-            mapInstance.getLayer(LAYER_ROUTES_GLOW)
-              ? LAYER_HEATMAP
-              : undefined
-          );
-        }
+      // Route Glow
+      if (linesGeoJSON && !mapInstance.getLayer(LAYER_ROUTES_GLOW)) {
+        mapInstance.addLayer({
+          id: LAYER_ROUTES_GLOW,
+          type: "line",
+          source: SOURCE_ROUTES,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": "rgba(0, 255, 245, 0.15)",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 4, 10, 8, 15, 14],
+            "line-blur": 6,
+          },
+        });
+      }
+
+      // Route Main Line
+      if (linesGeoJSON && !mapInstance.getLayer(LAYER_ROUTES)) {
+        mapInstance.addLayer({
+          id: LAYER_ROUTES,
+          type: "line",
+          source: SOURCE_ROUTES,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": [
+              "interpolate", ["linear"], ["zoom"],
+              2, "rgba(0, 255, 245, 0.5)",
+              8, "rgba(0, 255, 245, 0.75)",
+              14, "rgba(0, 255, 245, 0.9)",
+            ],
+            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 2, 15, 3.5],
+          },
+        });
+      }
+
+      // Unclustered Point Glow
+      if (pointsGeoJSON && !mapInstance.getLayer(LAYER_UNCLUSTERED_GLOW)) {
+        mapInstance.addLayer({
+          id: LAYER_UNCLUSTERED_GLOW,
+          type: "circle",
+          source: SOURCE_FOOTPRINTS,
+          filter: ["!", ["has", "point_count"]],
+          minzoom: 12,
+          paint: {
+            "circle-radius": 8,
+            "circle-color": "rgba(255, 0, 255, 0.2)",
+            "circle-blur": 0.8,
+          },
+        });
+      }
+
+      // Unclustered Point Core
+      if (pointsGeoJSON && !mapInstance.getLayer(LAYER_UNCLUSTERED_POINT)) {
+        mapInstance.addLayer({
+          id: LAYER_UNCLUSTERED_POINT,
+          type: "circle",
+          source: SOURCE_FOOTPRINTS,
+          filter: ["!", ["has", "point_count"]],
+          minzoom: 12,
+          paint: {
+            "circle-radius": 4,
+            "circle-color": "#ff00ff",
+            "circle-stroke-width": 1.5,
+            "circle-stroke-color": "#0a0a0f",
+          },
+        });
+      }
+
+      // Cluster Circles
+      if (pointsGeoJSON && !mapInstance.getLayer(LAYER_CLUSTER_CIRCLES)) {
+        mapInstance.addLayer({
+          id: LAYER_CLUSTER_CIRCLES,
+          type: "circle",
+          source: SOURCE_FOOTPRINTS,
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": [
+              "step", ["get", "point_count"],
+              "rgba(0, 255, 245, 0.85)", 25,
+              "rgba(180, 71, 255, 0.85)", 100,
+              "rgba(255, 0, 255, 0.85)", 500,
+              "rgba(255, 61, 138, 0.9)",
+            ],
+            "circle-radius": [
+              "step", ["get", "point_count"],
+              16, 25, 22, 100, 28, 500, 36,
+            ],
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "rgba(0, 0, 0, 0.4)",
+            "circle-blur": 0.15,
+          },
+        });
+      }
+
+      // Cluster Count Text
+      if (pointsGeoJSON && !mapInstance.getLayer(LAYER_CLUSTER_COUNT)) {
+        mapInstance.addLayer({
+          id: LAYER_CLUSTER_COUNT,
+          type: "symbol",
+          source: SOURCE_FOOTPRINTS,
+          filter: ["has", "point_count"],
+          layout: {
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
+            "text-size": 12,
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": "#ffffff",
+            "text-halo-color": "rgba(0, 0, 0, 0.5)",
+            "text-halo-width": 1,
+          },
+        });
       }
 
       layersAddedRef.current = true;

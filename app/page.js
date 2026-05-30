@@ -34,6 +34,8 @@ export default function Home() {
   const [error, setError] = useState(null);
 
   const [stats, setStats] = useState(null);
+  const [currentTime, setCurrentTime] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const handleFileLoaded = useCallback((name, content) => {
     try {
@@ -48,6 +50,13 @@ export default function Home() {
       setStats(parsedStats);
       setFileName(name);
       setAppState("transitioning");
+
+      if (parsedStats && parsedStats.startTime) {
+        setCurrentTime(new Date(parsedStats.startTime).getTime());
+      } else {
+        setCurrentTime(null);
+      }
+      setIsPlaying(false);
 
       // Transition delay
       setTimeout(() => {
@@ -64,6 +73,8 @@ export default function Home() {
     setStats(null);
     setFileName("");
     setError(null);
+    setCurrentTime(null);
+    setIsPlaying(false);
   }, []);
 
   return (
@@ -91,8 +102,17 @@ export default function Home() {
 
       {(appState === "transitioning" || appState === "map") && (
         <>
-          <Sidebar stats={stats} fileName={fileName} onReset={handleReset} />
-          <MapView geojson={geojson} stats={stats} />
+          <Sidebar
+            stats={stats}
+            geojson={geojson}
+            fileName={fileName}
+            onReset={handleReset}
+            currentTime={currentTime}
+            setCurrentTime={setCurrentTime}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+          />
+          <MapView geojson={geojson} stats={stats} currentTime={currentTime} />
         </>
       )}
     </main>
