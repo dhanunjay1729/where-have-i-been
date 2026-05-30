@@ -59,77 +59,151 @@ function StatCard({ label, value, icon, color = "cyan", delay = 0 }) {
 }
 
 export default function Sidebar({ stats, fileName, onReset }) {
+  // Detect if this is a Semantic/Timeline stats shape or generic
+  const isSemanticStats = stats?.totalPlacesVisited !== undefined;
+
   const statCards = useMemo(() => {
     if (!stats) return [];
 
-    const cards = [
-      {
+    const cards = [];
+
+    if (isSemanticStats) {
+      // ── Semantic Location History / Timeline.json stats ──
+      cards.push({
         label: "Distance",
-        value: formatDistance(stats.totalDistance),
+        value: formatDistance(stats.totalDistanceTraveledKm || 0),
         icon: "📏",
         color: "cyan",
-      },
-      {
-        label: "Data Points",
-        value: stats.totalPoints.toLocaleString(),
+      });
+
+      cards.push({
+        label: "Places Visited",
+        value: stats.totalPlacesVisited.toLocaleString(),
         icon: "📍",
         color: "magenta",
-      },
-      {
+      });
+
+      cards.push({
         label: "Features",
         value: stats.totalFeatures.toLocaleString(),
         icon: "🗺️",
         color: "purple",
-      },
-    ];
-
-    if (stats.duration) {
-      cards.push({
-        label: "Duration",
-        value: formatDuration(stats.duration),
-        icon: "⏱️",
-        color: "blue",
       });
-    }
 
-    if (stats.avgSpeed) {
-      cards.push({
-        label: "Avg Speed",
-        value: `${stats.avgSpeed.toFixed(1)} km/h`,
-        icon: "⚡",
-        color: "yellow",
-      });
-    }
+      if (stats.totalActivitySegments > 0) {
+        cards.push({
+          label: "Trips",
+          value: stats.totalActivitySegments.toLocaleString(),
+          icon: "🚀",
+          color: "blue",
+        });
+      }
 
-    if (stats.maxElevation !== null) {
-      cards.push({
-        label: "Max Elevation",
-        value: `${stats.maxElevation.toFixed(0)} m`,
-        icon: "⛰️",
-        color: "pink",
-      });
-    }
+      if (stats.uniqueCitiesCount > 0) {
+        cards.push({
+          label: "Unique Places",
+          value: stats.uniqueCitiesCount.toLocaleString(),
+          icon: "🌍",
+          color: "yellow",
+        });
+      }
 
-    if (stats.minElevation !== null) {
+      // Show top travel modes
+      if (stats.topTravelModes?.length > 0) {
+        const top = stats.topTravelModes[0];
+        const modeLabels = {
+          IN_PASSENGER_VEHICLE: "🚗 Driving",
+          DRIVING: "🚗 Driving",
+          WALKING: "🚶 Walking",
+          ON_FOOT: "🚶 On Foot",
+          CYCLING: "🚲 Cycling",
+          IN_BUS: "🚌 Bus",
+          IN_TRAIN: "🚆 Train",
+          IN_SUBWAY: "🚇 Subway",
+          FLYING: "✈️ Flying",
+          IN_FERRY: "⛴️ Ferry",
+          RUNNING: "🏃 Running",
+          MOTORCYCLING: "🏍️ Motorcycle",
+          TIMELINE_PATH: "📍 Tracked",
+        };
+        cards.push({
+          label: "Top Mode",
+          value: modeLabels[top.mode] || top.mode,
+          icon: "⚡",
+          color: "pink",
+        });
+      }
+    } else {
+      // ── Generic stats (GPX / KML / GeoJSON / Records.json) ──
       cards.push({
-        label: "Min Elevation",
-        value: `${stats.minElevation.toFixed(0)} m`,
-        icon: "🏔️",
-        color: "blue",
-      });
-    }
-
-    if (stats.totalElevationGain) {
-      cards.push({
-        label: "Elevation Gain",
-        value: `${stats.totalElevationGain.toFixed(0)} m`,
-        icon: "📈",
+        label: "Distance",
+        value: formatDistance(stats.totalDistance),
+        icon: "📏",
         color: "cyan",
       });
+
+      cards.push({
+        label: "Data Points",
+        value: stats.totalPoints.toLocaleString(),
+        icon: "📍",
+        color: "magenta",
+      });
+
+      cards.push({
+        label: "Features",
+        value: stats.totalFeatures.toLocaleString(),
+        icon: "🗺️",
+        color: "purple",
+      });
+
+      if (stats.duration) {
+        cards.push({
+          label: "Duration",
+          value: formatDuration(stats.duration),
+          icon: "⏱️",
+          color: "blue",
+        });
+      }
+
+      if (stats.avgSpeed) {
+        cards.push({
+          label: "Avg Speed",
+          value: `${stats.avgSpeed.toFixed(1)} km/h`,
+          icon: "⚡",
+          color: "yellow",
+        });
+      }
+
+      if (stats.maxElevation !== null) {
+        cards.push({
+          label: "Max Elevation",
+          value: `${stats.maxElevation.toFixed(0)} m`,
+          icon: "⛰️",
+          color: "pink",
+        });
+      }
+
+      if (stats.minElevation !== null) {
+        cards.push({
+          label: "Min Elevation",
+          value: `${stats.minElevation.toFixed(0)} m`,
+          icon: "🏔️",
+          color: "blue",
+        });
+      }
+
+      if (stats.totalElevationGain) {
+        cards.push({
+          label: "Elevation Gain",
+          value: `${stats.totalElevationGain.toFixed(0)} m`,
+          icon: "📈",
+          color: "cyan",
+        });
+      }
     }
 
     return cards;
-  }, [stats]);
+  }, [stats, isSemanticStats]);
 
   return (
     <aside className="slide-in-left w-80 h-full bg-surface/90 backdrop-blur-md border-r border-neon-cyan/10 flex flex-col overflow-hidden z-20">

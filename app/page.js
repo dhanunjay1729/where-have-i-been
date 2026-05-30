@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import DropZone from "./components/DropZone";
 import Sidebar from "./components/Sidebar";
-import { parseFile, calculateStats } from "./utils/fileParser";
+import { parseFile } from "./utils/fileParser";
 
 // Dynamically import MapView to avoid SSR issues with Leaflet
 const MapView = dynamic(() => import("./components/MapView"), {
@@ -33,21 +33,19 @@ export default function Home() {
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState(null);
 
-  const stats = useMemo(() => {
-    if (!geojson) return null;
-    return calculateStats(geojson);
-  }, [geojson]);
+  const [stats, setStats] = useState(null);
 
   const handleFileLoaded = useCallback((name, content) => {
     try {
-      const parsed = parseFile(name, content);
+      const { geojson: parsedGeojson, stats: parsedStats } = parseFile(name, content);
 
-      if (!parsed.features || parsed.features.length === 0) {
+      if (!parsedGeojson.features || parsedGeojson.features.length === 0) {
         setError("No geographic features found in this file.");
         return;
       }
 
-      setGeojson(parsed);
+      setGeojson(parsedGeojson);
+      setStats(parsedStats);
       setFileName(name);
       setAppState("transitioning");
 
@@ -63,6 +61,7 @@ export default function Home() {
   const handleReset = useCallback(() => {
     setAppState("upload");
     setGeojson(null);
+    setStats(null);
     setFileName("");
     setError(null);
   }, []);

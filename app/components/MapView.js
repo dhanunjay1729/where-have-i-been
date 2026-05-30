@@ -58,7 +58,20 @@ export default function MapView({ geojson, stats }) {
     if (stats?.bounds) {
       map.fitBounds(stats.bounds, { padding: [50, 50] });
     } else {
-      map.setView([20, 0], 2);
+      // Calculate bounds from the data itself
+      const allCoords = [...points, ...lines.flat()];
+      if (allCoords.length > 0) {
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const [lng, lat] of allCoords) {
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+        }
+        map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [50, 50] });
+      } else {
+        map.setView([20, 0], 2);
+      }
     }
 
     // Add lines with gradient-like neon effect
