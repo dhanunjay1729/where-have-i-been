@@ -9,36 +9,10 @@ import useMapFootprints from "../hooks/useMapFootprints";
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Use a free dark style (no Mapbox token required for CARTO basemaps via style spec)
-// For production, set your Mapbox access token here:
-// mapboxgl.accessToken = 'pk.your_token_here';
+mapboxgl.accessToken =
+  "REDACTED_MAPBOX_TOKEN";
 
-const DARK_STYLE = {
-  version: 8,
-  name: "CyberDark",
-  sources: {
-    "carto-dark": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    },
-  },
-  layers: [
-    {
-      id: "carto-dark-layer",
-      type: "raster",
-      source: "carto-dark",
-      minzoom: 0,
-      maxzoom: 22,
-    },
-  ],
-};
+const DARK_STYLE = "mapbox://styles/mapbox/dark-v11";
 
 export default function MapView({ geojson, stats }) {
   const mapContainerRef = useRef(null);
