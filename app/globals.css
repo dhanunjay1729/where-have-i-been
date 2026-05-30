@@ -188,24 +188,80 @@ body {
   background: var(--neon-magenta);
 }
 
-/* ─── Leaflet overrides for dark theme ──────────── */
-.leaflet-container {
-  background: var(--background) !important;
+/* ─── Mapbox GL overrides for dark theme ────────── */
+.mapboxgl-map {
+  font: inherit;
 }
-.leaflet-control-zoom a {
+
+.mapboxgl-canvas {
+  outline: none;
+}
+
+.mapboxgl-ctrl-group {
+  background: var(--surface) !important;
+  border: 1px solid rgba(0, 255, 245, 0.15) !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+}
+
+.mapboxgl-ctrl-group button {
   background: var(--surface) !important;
   color: var(--neon-cyan) !important;
-  border-color: rgba(0,255,245,0.2) !important;
+  border: none !important;
+  width: 32px !important;
+  height: 32px !important;
 }
-.leaflet-control-zoom a:hover {
+
+.mapboxgl-ctrl-group button:hover {
   background: var(--surface-light) !important;
 }
-.leaflet-control-attribution {
+
+.mapboxgl-ctrl-group button + button {
+  border-top: 1px solid rgba(0, 255, 245, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
+  filter: invert(1) sepia(1) saturate(5) hue-rotate(150deg);
+}
+
+.mapboxgl-ctrl-attrib {
   background: rgba(10, 10, 15, 0.8) !important;
   color: rgba(224, 224, 255, 0.4) !important;
+  font-size: 9px !important;
+  font-family: var(--font-mono), monospace !important;
 }
-.leaflet-control-attribution a {
+
+.mapboxgl-ctrl-attrib a {
   color: rgba(0, 255, 245, 0.5) !important;
+}
+
+/* ─── Custom popup style ────────────────────────── */
+.footprint-popup .mapboxgl-popup-content {
+  background: rgba(18, 18, 31, 0.95) !important;
+  border: 1px solid rgba(0, 255, 245, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  box-shadow:
+    0 0 12px rgba(0, 255, 245, 0.15),
+    0 4px 20px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(8px);
+}
+
+.footprint-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(18, 18, 31, 0.95) !important;
+}
+
+.footprint-popup .mapboxgl-popup-close-button {
+  color: rgba(0, 255, 245, 0.6) !important;
+  font-size: 16px !important;
+  padding: 2px 6px !important;
+  right: 2px !important;
+  top: 2px !important;
+}
+
+.footprint-popup .mapboxgl-popup-close-button:hover {
+  color: var(--neon-cyan) !important;
+  background: transparent !important;
 }
 
 /* ─── Stat card glow ────────────────────────────── */
