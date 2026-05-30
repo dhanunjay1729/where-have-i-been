@@ -13,7 +13,7 @@ mapboxgl.accessToken =
 
 const DARK_STYLE = "mapbox://styles/mapbox/dark-v11";
 
-export default function MapView({ geojson, stats }) {
+export default function MapView({ geojson, stats, currentTime }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
@@ -61,7 +61,7 @@ export default function MapView({ geojson, stats }) {
   }, []);
 
   // Hook: inject GeoJSON layers when map is ready and data is present
-  useMapFootprints(mapReady ? mapInstanceRef.current : null, geojson);
+  useMapFootprints(mapReady ? mapInstanceRef.current : null, geojson, currentTime);
 
   return (
     <div className="fade-scale-in flex-1 w-full h-full relative">
