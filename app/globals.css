@@ -1,26 +1,241 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0f;
+  --foreground: #e0e0ff;
+  --neon-cyan: #00fff5;
+  --neon-magenta: #ff00ff;
+  --neon-purple: #b347ff;
+  --neon-blue: #4d7fff;
+  --neon-pink: #ff3d8a;
+  --neon-yellow: #ffe14d;
+  --surface: #12121f;
+  --surface-light: #1a1a2e;
+  --border-glow: rgba(0, 255, 245, 0.15);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-neon-cyan: var(--neon-cyan);
+  --color-neon-magenta: var(--neon-magenta);
+  --color-neon-purple: var(--neon-purple);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-pink: var(--neon-pink);
+  --color-neon-yellow: var(--neon-yellow);
+  --color-surface: var(--surface);
+  --color-surface-light: var(--surface-light);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* ─── Animated background grid ──────────────────── */
+.cyber-grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,255,245,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,245,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridShift 20s linear infinite;
+}
+@keyframes gridShift {
+  0% { background-position: 0 0; }
+  100% { background-position: 60px 60px; }
+}
+
+/* ─── Scanline overlay ──────────────────────────── */
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* ─── Neon text glow ────────────────────────────── */
+.neon-text {
+  text-shadow:
+    0 0 7px var(--neon-cyan),
+    0 0 10px var(--neon-cyan),
+    0 0 21px var(--neon-cyan),
+    0 0 42px var(--neon-blue);
+}
+
+.neon-text-pink {
+  text-shadow:
+    0 0 7px var(--neon-pink),
+    0 0 10px var(--neon-magenta),
+    0 0 21px var(--neon-magenta);
+}
+
+/* ─── Glowing border animation ──────────────────── */
+@keyframes borderGlow {
+  0%, 100% {
+    box-shadow:
+      0 0 5px var(--neon-cyan),
+      0 0 10px rgba(0,255,245,0.3),
+      inset 0 0 5px rgba(0,255,245,0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 10px var(--neon-cyan),
+      0 0 25px rgba(0,255,245,0.5),
+      inset 0 0 10px rgba(0,255,245,0.2);
+  }
+}
+
+.glow-border {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+/* ─── Pulse animation ───────────────────────────── */
+@keyframes neonPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.neon-pulse {
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+/* ─── Dropzone ring animation ───────────────────── */
+@keyframes ringRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ringRotateReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.ring-spin {
+  animation: ringRotate 8s linear infinite;
+}
+
+.ring-spin-reverse {
+  animation: ringRotateReverse 12s linear infinite;
+}
+
+/* ─── Float animation ───────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.float-anim {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* ─── Particle drift ────────────────────────────── */
+@keyframes particleDrift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+}
+
+/* ─── Slide-in animation for sidebar ────────────── */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.slide-in-left {
+  animation: slideInLeft 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ─── Fade scale for map ────────────────────────── */
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.fade-scale-in {
+  animation: fadeScaleIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ─── Custom scrollbar ──────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--neon-cyan);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-magenta);
+}
+
+/* ─── Leaflet overrides for dark theme ──────────── */
+.leaflet-container {
+  background: var(--background) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--surface) !important;
+  color: var(--neon-cyan) !important;
+  border-color: rgba(0,255,245,0.2) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--surface-light) !important;
+}
+.leaflet-control-attribution {
+  background: rgba(10, 10, 15, 0.8) !important;
+  color: rgba(224, 224, 255, 0.4) !important;
+}
+.leaflet-control-attribution a {
+  color: rgba(0, 255, 245, 0.5) !important;
+}
+
+/* ─── Stat card glow ────────────────────────────── */
+@keyframes statGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(0,255,245,0);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(0,255,245,0.1);
+  }
+}
+.stat-card {
+  animation: statGlow 4s ease-in-out infinite;
+}
+
+/* ─── Progress bar fill ─────────────────────────── */
+@keyframes progressFill {
+  from { width: 0; }
+}
+.progress-fill {
+  animation: progressFill 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ─── Glitch effect for title ───────────────────── */
+@keyframes glitch {
+  0%, 92%, 100% { transform: none; }
+  93% { transform: translate(-2px, 1px); }
+  95% { transform: translate(2px, -1px); }
+  97% { transform: translate(-1px, -1px); }
+}
+.glitch-text {
+  animation: glitch 5s linear infinite;
 }
