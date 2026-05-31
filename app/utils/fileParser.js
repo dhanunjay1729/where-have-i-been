@@ -123,6 +123,7 @@ function parseSemanticLocationHistory(data) {
   // Accumulators for stats
   let totalPlacesVisited = 0;
   let totalDistanceTraveled = 0; // in meters
+  let totalActivitySegmentsCount = 0;
   const travelModeCounts = new Map();
   const citySet = new Set();
 
@@ -146,6 +147,7 @@ function parseSemanticLocationHistory(data) {
         }
       }
     } else if (obj.activitySegment) {
+      totalActivitySegmentsCount++;
       const result = processActivitySegment(obj.activitySegment, prevCoord);
       if (result.feature) {
         features.push(result.feature);
@@ -182,9 +184,7 @@ function parseSemanticLocationHistory(data) {
     uniqueCitiesCount: citySet.size,
     topTravelModes,
     totalFeatures: features.length,
-    totalActivitySegments: features.filter(
-      (f) => f.properties._type === "activitySegment"
-    ).length,
+    totalActivitySegments: totalActivitySegmentsCount,
   };
 
   return { geojson, stats };
@@ -309,29 +309,8 @@ function processActivitySegment(seg, prevCoord) {
     }
   }
 
-  // Fallback: try to build a 2-point line from startLocation → endLocation
-  if (!coordinates) {
-    const startLoc = seg.startLocation;
-    const endLoc = seg.endLocation;
-    if (startLoc && endLoc) {
-      const sLat = convertE7(startLoc.latitudeE7);
-      const sLng = convertE7(startLoc.longitudeE7);
-      const eLat = convertE7(endLoc.latitudeE7);
-      const eLng = convertE7(endLoc.longitudeE7);
-
-      if (sLat != null && sLng != null && eLat != null && eLng != null) {
-        const startCoord = [capPrecision(sLng), capPrecision(sLat)];
-        const endCoord = [capPrecision(eLng), capPrecision(eLat)];
-
-        // Only create if the two points are far enough apart
-        if (haversineKm(startCoord, endCoord) >= DEDUP_THRESHOLD_KM) {
-          coordinates = [startCoord, endCoord];
-          lastCoord = endCoord;
-        }
-      }
-    }
-  }
-
+  // We no longer fallback to a 2-point straight line between start and end.
+  // This ensures we only render paths where actual waypoints are available.
   if (!coordinates) {
     // No geometry to create, but still count distance + mode
     return { feature: null, distance, activityType, lastCoord: null };
@@ -385,6 +364,7 @@ function parseTimelineJson(data) {
   // Accumulators for stats
   let totalPlacesVisited = 0;
   let totalDistanceTraveled = 0; // meters
+  let totalActivitySegmentsCount = 0;
   const travelModeCounts = new Map();
   const travelModeDistance = new Map();
   const placeNames = new Set();
@@ -441,6 +421,7 @@ function parseTimelineJson(data) {
 
     // ── Activity segment ───────────────────────────────────────
     } else if (seg.activity) {
+      totalActivitySegmentsCount++;
       const act = seg.activity;
       // act.start / act.end can be either a string ("geo:lat,lng")
       // or an object like { latLng: "geo:lat,lng" }
@@ -459,24 +440,7 @@ function parseTimelineJson(data) {
         if (diffMs > 0) durationMinutes = +(diffMs / 60000).toFixed(1);
       }
 
-      if (startCoord && endCoord && haversineKm(startCoord, endCoord) >= DEDUP_THRESHOLD_KM) {
-        const props = {
-          _type: "activitySegment",
-          activityType,
-          distanceMeters: distance,
-          startTimestamp: startTime,
-          endTimestamp: endTime,
-          waypointCount: 2,
-        };
-        if (distance > 0) props.distanceKm = +(distance / 1000).toFixed(2);
-        if (act.topCandidate?.probability) props.probability = parseFloat(act.topCandidate.probability);
-        if (durationMinutes !== null) props.durationMinutes = durationMinutes;
-
-        features.push({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [startCoord, endCoord] },
-          properties: props,
-        });
+      if (endCoord) {
         prevCoord = endCoord;
       }
 
@@ -568,9 +532,7 @@ function parseTimelineJson(data) {
     uniqueCitiesCount: placeNames.size,
     topTravelModes,
     totalFeatures: features.length,
-    totalActivitySegments: features.filter(
-      (f) => f.properties._type === "activitySegment"
-    ).length,
+    totalActivitySegments: totalActivitySegmentsCount,
   };
 
   return { geojson, stats };
