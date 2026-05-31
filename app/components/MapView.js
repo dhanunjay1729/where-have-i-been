@@ -373,10 +373,17 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
         // Sky layer may already exist
       }
 
-      // Inject data after style loads
-      if (dataRef.current) {
+      // Safe injection loop: Wait for style to be fully ready before adding custom data
+      const tryInject = () => {
+        if (!map || !dataRef.current) return;
+        if (!map.isStyleLoaded()) {
+          setTimeout(tryInject, 100);
+          return;
+        }
         injectData(map, dataRef.current);
-      }
+      };
+      
+      tryInject();
     });
 
     // ── Interactive behaviors ──────────────────────────────────────
@@ -490,9 +497,9 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
 
     if (map.isStyleLoaded()) {
       injectData(map, geojson);
-    } else {
-      map.once("style.load", () => injectData(map, geojson));
     }
+    // Note: If the style is not loaded yet, the map.on("style.load") listener
+    // from the map initialization useEffect will handle injecting the data.
   }, [geojson, injectData]);
 
   const initialStyleMountRef = useRef(true);
