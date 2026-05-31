@@ -1,6 +1,6 @@
 # 🌍 WHERE HAVE I BEEN
 
-*Honestly, this was just a really fun project! I vibe-coded the whole thing because I just wanted to make an app that tracks all my footprints all over the world.*
+_Honestly, this was just a really fun project! I vibe-coded the whole thing because I just wanted to make an app that tracks all my footprints all over the world._
 
 A stunning, cyberpunk-themed travel visualization app that transforms your location history into an interactive map experience. Upload your travel data files and watch your journeys come alive with heatmaps, route animations, and rich statistics.
 
@@ -12,14 +12,11 @@ A stunning, cyberpunk-themed travel visualization app that transforms your locat
 
 ## 📸 Screenshots
 
-*(Add a screenshot here showing the initial Drag and Drop upload zone with the cyberpunk glowing effects)*
-![Upload Screen Placeholder](docs/images/upload-screen.png)
-
-*(Add a screenshot here showing the full map view with route lines and the dark map style)*
 ![Map View Placeholder](docs/images/map-view.png)
+![Map View Placeholder](docs/images/map-view2.png)
 
-*(Add a screenshot here showing the expanded sidebar with travel statistics and badges)*
 ![Stats Sidebar Placeholder](docs/images/sidebar-stats.png)
+![Stats Sidebar Placeholder](docs/images/sidebar-stats2.png)
 
 ---
 
@@ -66,9 +63,11 @@ npm run dev
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Your Mapbox GL access token | ✅ |
+| Variable                          | Description                 | Required |
+| --------------------------------- | --------------------------- | -------- |
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Your Mapbox GL access token | ✅       |
+
+> **Note:** Keep your token private and rotate it immediately if you ever accidentally commit it.
 
 ### Building for Production
 
@@ -79,14 +78,14 @@ npm start
 
 ## 📁 Supported File Formats
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| **GPX** | `.gpx` | GPS Exchange Format (Strava, Garmin, etc.) |
-| **KML** | `.kml` | Google Earth / Google My Maps |
-| **GeoJSON** | `.geojson` | Standard geographic JSON |
-| **Google Timeline** | `.json` | Modern Google Timeline export (2024+, `semanticSegments`) |
-| **Google Takeout** | `.json` | Legacy Semantic Location History (`timelineObjects`) |
-| **Google Records** | `.json` | Raw location records (`locations` array) |
+| Format              | Extension  | Description                                               |
+| ------------------- | ---------- | --------------------------------------------------------- |
+| **GPX**             | `.gpx`     | GPS Exchange Format (Strava, Garmin, etc.)                |
+| **KML**             | `.kml`     | Google Earth / Google My Maps                             |
+| **GeoJSON**         | `.geojson` | Standard geographic JSON                                  |
+| **Google Timeline** | `.json`    | Modern Google Timeline export (2024+, `semanticSegments`) |
+| **Google Takeout**  | `.json`    | Legacy Semantic Location History (`timelineObjects`)      |
+| **Google Records**  | `.json`    | Raw location records (`locations` array)                  |
 
 ## 🏗️ Architecture
 
