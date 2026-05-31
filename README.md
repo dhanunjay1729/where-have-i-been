@@ -87,6 +87,17 @@ npm start
 | **Google Takeout**  | `.json`    | Legacy Semantic Location History (`timelineObjects`)      |
 | **Google Records**  | `.json`    | Raw location records (`locations` array)                  |
 
+## 📍 Example: Export Google Timeline from your phone
+
+Here’s one simple way to grab your location history and upload it:
+
+1. On your phone, open **Google Maps** → tap your profile photo → **Your Timeline**.
+2. Tap the **⋮** menu → **Settings & privacy** → **Export Timeline data**.
+3. Choose a date range, then export the file (you’ll get a `.json`).
+4. Upload that file directly into this app’s drop zone.
+
+> The export typically contains `semanticSegments`, which the app supports out of the box.
+
 ## 🏗️ Architecture
 
 ```
