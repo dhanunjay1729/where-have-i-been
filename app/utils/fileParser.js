@@ -386,6 +386,7 @@ function parseTimelineJson(data) {
   let totalPlacesVisited = 0;
   let totalDistanceTraveled = 0; // meters
   const travelModeCounts = new Map();
+  const travelModeDistance = new Map();
   const placeNames = new Set();
   let prevCoord = null;
 
@@ -417,19 +418,21 @@ function parseTimelineJson(data) {
       const name = candidate.placeID || null;
       const semanticType = candidate.semanticType || null;
 
+      const props = {
+        _type: "placeVisit"
+      };
+      if (semanticType || name) props.name = semanticType || name;
+      if (candidate.placeID) props.placeId = candidate.placeID;
+      if (candidate.probability) props.probability = parseFloat(candidate.probability);
+      if (semanticType) props.semanticType = semanticType;
+      if (startTime) props.arrivalTimestamp = startTime;
+      if (endTime) props.departureTimestamp = endTime;
+      if (durationMinutes !== null) props.durationMinutes = durationMinutes;
+
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: coord },
-        properties: {
-          _type: "placeVisit",
-          name: semanticType || name,
-          placeId: candidate.placeID || null,
-          probability: candidate.probability ? parseFloat(candidate.probability) : null,
-          semanticType,
-          arrivalTimestamp: startTime,
-          departureTimestamp: endTime,
-          durationMinutes,
-        },
+        properties: props,
       });
 
       totalPlacesVisited++;
@@ -439,9 +442,13 @@ function parseTimelineJson(data) {
     // ── Activity segment ───────────────────────────────────────
     } else if (seg.activity) {
       const act = seg.activity;
+      // act.start / act.end can be either a string ("geo:lat,lng")
+      // or an object like { latLng: "geo:lat,lng" }
       const startCoord = parseLatLngString(act.start);
       const endCoord = parseLatLngString(act.end);
-      const activityType = act.topCandidate?.type || null;
+      const rawType = act.topCandidate?.type || null;
+      // Normalize to uppercase for consistent label matching in sidebar
+      const activityType = rawType ? rawType.toUpperCase() : null;
       const distance = act.distanceMeters
         ? parseFloat(act.distanceMeters)
         : 0;
@@ -453,22 +460,22 @@ function parseTimelineJson(data) {
       }
 
       if (startCoord && endCoord && haversineKm(startCoord, endCoord) >= DEDUP_THRESHOLD_KM) {
+        const props = {
+          _type: "activitySegment",
+          activityType,
+          distanceMeters: distance,
+          startTimestamp: startTime,
+          endTimestamp: endTime,
+          waypointCount: 2,
+        };
+        if (distance > 0) props.distanceKm = +(distance / 1000).toFixed(2);
+        if (act.topCandidate?.probability) props.probability = parseFloat(act.topCandidate.probability);
+        if (durationMinutes !== null) props.durationMinutes = durationMinutes;
+
         features.push({
           type: "Feature",
           geometry: { type: "LineString", coordinates: [startCoord, endCoord] },
-          properties: {
-            _type: "activitySegment",
-            activityType,
-            distanceMeters: distance,
-            distanceKm: distance > 0 ? +(distance / 1000).toFixed(2) : null,
-            probability: act.topCandidate?.probability
-              ? parseFloat(act.topCandidate.probability)
-              : null,
-            startTimestamp: startTime,
-            endTimestamp: endTime,
-            durationMinutes,
-            waypointCount: 2,
-          },
+          properties: props,
         });
         prevCoord = endCoord;
       }
@@ -478,6 +485,10 @@ function parseTimelineJson(data) {
         travelModeCounts.set(
           activityType,
           (travelModeCounts.get(activityType) || 0) + 1
+        );
+        travelModeDistance.set(
+          activityType,
+          (travelModeDistance.get(activityType) || 0) + distance
         );
       }
 
@@ -512,18 +523,20 @@ function parseTimelineJson(data) {
           pathDist += haversineKm(coords[j - 1], coords[j]);
         }
 
+        const props = {
+          _type: "activitySegment",
+          activityType: "TIMELINE_PATH",
+          distanceMeters: +(pathDist * 1000).toFixed(0),
+          distanceKm: +pathDist.toFixed(2),
+          waypointCount: coords.length,
+        };
+        if (startTime) props.startTimestamp = startTime;
+        if (endTime) props.endTimestamp = endTime;
+
         features.push({
           type: "Feature",
           geometry: { type: "LineString", coordinates: coords },
-          properties: {
-            _type: "activitySegment",
-            activityType: "TIMELINE_PATH",
-            distanceMeters: +(pathDist * 1000).toFixed(0),
-            distanceKm: +pathDist.toFixed(2),
-            startTimestamp: startTime,
-            endTimestamp: endTime,
-            waypointCount: coords.length,
-          },
+          properties: props,
         });
 
         totalDistanceTraveled += pathDist * 1000;
@@ -532,10 +545,18 @@ function parseTimelineJson(data) {
     }
   }
 
-  // Build sorted travel modes
+  // Build sorted travel modes (sorted by distance covered, not count)
   const topTravelModes = [...travelModeCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([mode, count]) => ({ mode, count }));
+    .sort((a, b) => {
+      const distA = travelModeDistance.get(a[0]) || 0;
+      const distB = travelModeDistance.get(b[0]) || 0;
+      return distB - distA;
+    })
+    .map(([mode, count]) => ({
+      mode,
+      count,
+      distanceKm: +((travelModeDistance.get(mode) || 0) / 1000).toFixed(1),
+    }));
 
   const geojson = { type: "FeatureCollection", features };
 
@@ -724,8 +745,17 @@ export function calculateStats(geojson) {
  * @param {string} str
  * @returns {number[]|null} [lng, lat] or null
  */
-function parseLatLngString(str) {
-  if (!str || typeof str !== "string") return null;
+function parseLatLngString(input) {
+  if (!input) return null;
+
+  // Handle object inputs like { latLng: "geo:lat,lng" } or { latLng: "lat°, lng°" }
+  let str = input;
+  if (typeof input === "object") {
+    str = input.latLng || input.latlng || input.location || null;
+    if (!str || typeof str !== "string") return null;
+  }
+
+  if (typeof str !== "string") return null;
 
   let cleaned = str.trim();
 

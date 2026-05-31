@@ -113,6 +113,7 @@ export default function Sidebar({ stats, fileName, onReset }) {
         const top = stats.topTravelModes[0];
         const modeLabels = {
           IN_PASSENGER_VEHICLE: "🚗 Driving",
+          IN_VEHICLE: "🚗 Driving",
           DRIVING: "🚗 Driving",
           WALKING: "🚶 Walking",
           ON_FOOT: "🚶 On Foot",
@@ -120,10 +121,15 @@ export default function Sidebar({ stats, fileName, onReset }) {
           IN_BUS: "🚌 Bus",
           IN_TRAIN: "🚆 Train",
           IN_SUBWAY: "🚇 Subway",
+          IN_TRAM: "🚊 Tram",
           FLYING: "✈️ Flying",
           IN_FERRY: "⛴️ Ferry",
           RUNNING: "🏃 Running",
           MOTORCYCLING: "🏍️ Motorcycle",
+          BOATING: "🚤 Boating",
+          SKIING: "⛷️ Skiing",
+          STILL: "🧍 Stationary",
+          UNKNOWN_ACTIVITY_TYPE: "❓ Unknown",
           TIMELINE_PATH: "📍 Tracked",
         };
         cards.push({
