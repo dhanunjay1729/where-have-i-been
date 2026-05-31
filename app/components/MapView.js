@@ -103,28 +103,7 @@ function calcBounds(geojson) {
 const SRC_POINTS = "footprints";
 const SRC_ROUTES = "routes";
 
-const LAYER_IDS = [
-  "heatmap",
-  "routes-glow",
-  "routes",
-  "clusters",
-  "cluster-count",
-  "unclustered-point",
-  "unclustered-glow",
-];
 
-function safeRemoveAll(map) {
-  try {
-    if (!map || !map.getStyle()) return;
-    for (const id of LAYER_IDS) {
-      if (map.getLayer(id)) map.removeLayer(id);
-    }
-    if (map.getSource(SRC_POINTS)) map.removeSource(SRC_POINTS);
-    if (map.getSource(SRC_ROUTES)) map.removeSource(SRC_ROUTES);
-  } catch {
-    // Map may be disposed
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -143,32 +122,42 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
     if (!map || !data) return;
 
     try {
-      safeRemoveAll(map);
-
       const { points, lines } = splitGeoJSON(data);
 
-      // ── Add sources ──────────────────────────────────────────────
+      // ── Add or Update sources ──────────────────────────────────────────────
       if (points) {
-        map.addSource(SRC_POINTS, {
-          type: "geojson",
-          data: deepCloneGeoJSON(points),
-          cluster: true,
-          clusterMaxZoom: 14,
-          clusterRadius: 50,
-        });
+        if (map.getSource(SRC_POINTS)) {
+          map.getSource(SRC_POINTS).setData(deepCloneGeoJSON(points));
+        } else {
+          map.addSource(SRC_POINTS, {
+            type: "geojson",
+            data: deepCloneGeoJSON(points),
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 50,
+          });
+        }
+      } else if (map.getSource(SRC_POINTS)) {
+        map.getSource(SRC_POINTS).setData({ type: "FeatureCollection", features: [] });
       }
 
       if (lines) {
-        map.addSource(SRC_ROUTES, {
-          type: "geojson",
-          data: deepCloneGeoJSON(lines),
-        });
+        if (map.getSource(SRC_ROUTES)) {
+          map.getSource(SRC_ROUTES).setData(deepCloneGeoJSON(lines));
+        } else {
+          map.addSource(SRC_ROUTES, {
+            type: "geojson",
+            data: deepCloneGeoJSON(lines),
+          });
+        }
+      } else if (map.getSource(SRC_ROUTES)) {
+        map.getSource(SRC_ROUTES).setData({ type: "FeatureCollection", features: [] });
       }
 
       // ── Add layers (bottom → top) ────────────────────────────────
 
       // Heatmap layer
-      if (points) {
+      if (points && !map.getLayer("heatmap")) {
         map.addLayer({
           id: "heatmap",
           type: "heatmap",
@@ -196,7 +185,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       }
 
       // Route glow (wider, blurry)
-      if (lines) {
+      if (lines && !map.getLayer("routes-glow")) {
         map.addLayer({
           id: "routes-glow",
           type: "line",
@@ -209,8 +198,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
             "line-opacity": 0.45,
           },
         });
+      }
 
-        // Route core line
+      // Route core line
+      if (lines && !map.getLayer("routes")) {
         map.addLayer({
           id: "routes",
           type: "line",
@@ -230,7 +221,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       }
 
       // Cluster circles
-      if (points) {
+      if (points && !map.getLayer("clusters")) {
         map.addLayer({
           id: "clusters",
           type: "circle",
@@ -253,8 +244,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
             "circle-blur": 0.1,
           },
         });
+      }
 
-        // Cluster count labels
+      // Cluster count labels
+      if (points && !map.getLayer("cluster-count")) {
         map.addLayer({
           id: "cluster-count",
           type: "symbol",
@@ -272,8 +265,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
             "text-halo-width": 1,
           },
         });
+      }
 
-        // Unclustered point glow
+      // Unclustered point glow
+      if (points && !map.getLayer("unclustered-glow")) {
         map.addLayer({
           id: "unclustered-glow",
           type: "circle",
@@ -285,8 +280,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
             "circle-blur": 0.8,
           },
         });
+      }
 
-        // Unclustered points
+      // Unclustered points
+      if (points && !map.getLayer("unclustered-point")) {
         map.addLayer({
           id: "unclustered-point",
           type: "circle",
@@ -498,27 +495,44 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
     }
   }, [geojson, injectData]);
 
+  const initialStyleMountRef = useRef(true);
+
   // Handle map style changes
   useEffect(() => {
+    if (initialStyleMountRef.current) {
+      initialStyleMountRef.current = false;
+      return;
+    }
+
     const map = mapInstanceRef.current;
     if (!map) return;
 
     const newStyle = MAP_STYLES[mapStyle] || MAP_STYLES.dark;
-    const currentStyle = map.getStyle()?.sprite;
-
-    // Only change if different
-    if (currentStyle && !currentStyle.includes(mapStyle)) {
+    
+    try {
       map.setStyle(newStyle);
       // Data will be re-injected on style.load event (set up in init)
+    } catch (err) {
+      console.error("[MapView] Error setting map style:", err);
     }
   }, [mapStyle]);
 
   // Resize map when sidebar toggles
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (map) {
-      setTimeout(() => map.resize(), 400); // Wait for sidebar animation
-    }
+    if (!map) return;
+
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.resize();
+        } catch (e) {
+          // Ignore if map is disposed
+        }
+      }
+    }, 400); // Wait for sidebar animation
+    
+    return () => clearTimeout(timer);
   }, [sidebarOpen]);
 
   return (
