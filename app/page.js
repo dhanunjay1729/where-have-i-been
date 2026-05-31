@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import DropZone from "./components/DropZone";
 import Sidebar from "./components/Sidebar";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { parseFile } from "./utils/fileParser";
+import { computeAchievements } from "./utils/achievements";
 
-// Dynamically import MapView to avoid SSR issues with Leaflet
+// Dynamically import MapView to avoid SSR issues with Mapbox GL
 const MapView = dynamic(() => import("./components/MapView"), {
   ssr: false,
   loading: () => (
@@ -32,10 +34,10 @@ export default function Home() {
   const [geojson, setGeojson] = useState(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState(null);
-
   const [stats, setStats] = useState(null);
-  const [currentTime, setCurrentTime] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [achievements, setAchievements] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mapStyle, setMapStyle] = useState("dark");
 
   const handleFileLoaded = useCallback((name, content) => {
     try {
@@ -51,14 +53,13 @@ export default function Home() {
       setFileName(name);
       setAppState("transitioning");
 
-      if (parsedStats && parsedStats.startTime) {
-        setCurrentTime(new Date(parsedStats.startTime).getTime());
-      } else {
-        setCurrentTime(null);
+      // Compute achievements based on stats
+      if (parsedStats) {
+        const earned = computeAchievements(parsedStats, parsedGeojson);
+        setAchievements(earned);
       }
-      setIsPlaying(false);
 
-      // Transition delay
+      // Transition delay for smooth animation
       setTimeout(() => {
         setAppState("map");
       }, 300);
@@ -73,48 +74,76 @@ export default function Home() {
     setStats(null);
     setFileName("");
     setError(null);
-    setCurrentTime(null);
-    setIsPlaying(false);
+    setAchievements([]);
+    setSidebarOpen(true);
   }, []);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (appState !== "map") return;
+      if (e.key === "Escape") {
+        setSidebarOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [appState]);
+
   return (
-    <main className="h-screen w-screen flex overflow-hidden relative">
-      {appState === "upload" && (
-        <div className="flex-1 flex flex-col">
-          <DropZone onFileLoaded={handleFileLoaded} />
+    <ErrorBoundary onReset={handleReset}>
+      <main id="app-root" className="h-screen w-screen flex overflow-hidden relative">
+        {appState === "upload" && (
+          <div className="flex-1 flex flex-col">
+            <DropZone onFileLoaded={handleFileLoaded} />
 
-          {error && (
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
-              <div className="bg-red-900/40 border border-red-500/30 rounded-lg px-6 py-3 text-sm text-red-300 font-mono flex items-center gap-3 backdrop-blur-sm">
-                <span>⚠</span>
-                <span>{error}</span>
-                <button
-                  onClick={() => setError(null)}
-                  className="text-red-400 hover:text-red-200 transition-colors ml-2 cursor-pointer"
-                >
-                  ✕
-                </button>
+            {error && (
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 fade-in-up">
+                <div className="glass-card px-6 py-3 text-sm text-red-300 font-mono flex items-center gap-3 border-red-500/20">
+                  <span className="text-red-400">⚠</span>
+                  <span>{error}</span>
+                  <button
+                    onClick={() => setError(null)}
+                    className="text-red-400 hover:text-red-200 transition-colors ml-2 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {(appState === "transitioning" || appState === "map") && (
-        <>
-          <Sidebar
-            stats={stats}
-            geojson={geojson}
-            fileName={fileName}
-            onReset={handleReset}
-            currentTime={currentTime}
-            setCurrentTime={setCurrentTime}
-            isPlaying={isPlaying}
-            setIsPlaying={setIsPlaying}
-          />
-          <MapView geojson={geojson} stats={stats} currentTime={currentTime} />
-        </>
-      )}
-    </main>
+        {(appState === "transitioning" || appState === "map") && (
+          <>
+            {/* Mobile overlay */}
+            <div
+              className={`mobile-overlay md:hidden ${sidebarOpen ? "open" : ""}`}
+              onClick={() => setSidebarOpen(false)}
+            />
+
+            <Sidebar
+              stats={stats}
+              geojson={geojson}
+              fileName={fileName}
+              onReset={handleReset}
+              achievements={achievements}
+              isOpen={sidebarOpen}
+              onToggle={() => setSidebarOpen((prev) => !prev)}
+              mapStyle={mapStyle}
+              onMapStyleChange={setMapStyle}
+            />
+
+            <MapView
+              geojson={geojson}
+              stats={stats}
+              mapStyle={mapStyle}
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+            />
+          </>
+        )}
+      </main>
+    </ErrorBoundary>
   );
 }

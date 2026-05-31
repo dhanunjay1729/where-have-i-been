@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🌍 WHERE HAVE I BEEN
 
-## Getting Started
+A stunning, cyberpunk-themed travel visualization app that transforms your location history into an interactive map experience. Upload your travel data files and watch your journeys come alive with heatmaps, route animations, and rich statistics.
 
-First, run the development server:
+**100% private** — all processing happens locally in your browser. No data is ever sent to any server.
+
+## ✨ Features
+
+- **Multi-format Support** — GPX, KML, GeoJSON, Google Timeline JSON, Google Takeout Semantic Location History, Google Records JSON
+- **Interactive Heatmap** — See where you spend the most time at a glance
+- **Route Visualization** — Gradient-colored travel routes with glow effects
+- **Clustered Points** — Intelligently grouped location markers that expand on zoom
+- **3D Terrain** — Tilt the map to see terrain elevation with atmospheric sky
+- **4 Map Styles** — Dark, Satellite, Streets, Terrain — switch anytime
+- **Travel Statistics** — Distance, places visited, trips, duration, elevation, speed
+- **Travel Mode Breakdown** — Visual chart showing your transport modes (driving, walking, cycling, etc.)
+- **Achievement System** — Earn badges for travel milestones (distance, places, elevation, multimodal travel)
+- **Rich Popups** — Click any point to see visit details, duration, and timestamps
+- **Cyberpunk Aesthetic** — Neon glows, scanlines, animated particles, glassmorphism
+- **Fully Responsive** — Works on desktop and mobile with collapsible sidebar
+- **Keyboard Shortcuts** — Press `Esc` to toggle sidebar
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- A [Mapbox](https://mapbox.com) access token (free tier is sufficient)
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/where-have-i-been.git
+cd where-have-i-been
+
+# Install dependencies
+npm install
+
+# Create environment file
+cp .env.example .env.local
+# Edit .env.local and add your Mapbox token
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Your Mapbox GL access token | ✅ |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Building for Production
 
-## Learn More
+```bash
+npm run build
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 📁 Supported File Formats
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| **GPX** | `.gpx` | GPS Exchange Format (Strava, Garmin, etc.) |
+| **KML** | `.kml` | Google Earth / Google My Maps |
+| **GeoJSON** | `.geojson` | Standard geographic JSON |
+| **Google Timeline** | `.json` | Modern Google Timeline export (2024+, `semanticSegments`) |
+| **Google Takeout** | `.json` | Legacy Semantic Location History (`timelineObjects`) |
+| **Google Records** | `.json` | Raw location records (`locations` array) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🏗️ Architecture
 
-## Deploy on Vercel
+```
+app/
+├── page.js                 # Main app entry with state management
+├── layout.js               # Root layout with SEO meta tags
+├── globals.css             # Design system (cyberpunk theme, animations)
+├── components/
+│   ├── DropZone.js         # File upload with particle animation
+│   ├── MapView.js          # Mapbox GL map with all layers & interactions
+│   ├── Sidebar.js          # Stats, achievements, travel modes, map styles
+│   └── ErrorBoundary.js    # Graceful crash recovery
+└── utils/
+    ├── fileParser.js       # Multi-format parser (GPX, KML, GeoJSON, Google)
+    └── achievements.js     # Travel achievement/badge system
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🛡️ Privacy
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This app is designed with privacy as a core principle:
+
+- **No server uploads** — All file parsing happens client-side in your browser
+- **No analytics** — No tracking scripts, no cookies, no data collection
+- **No external requests** — Only Mapbox tile requests for the map
+- **Open source** — Inspect the code yourself
+
+## 📄 License
+
+MIT
+
+---
+
+Built with [Next.js](https://nextjs.org), [Mapbox GL JS](https://mapbox.com), and a love for travel 🌏

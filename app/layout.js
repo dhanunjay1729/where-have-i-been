@@ -15,7 +15,39 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "WHERE HAVE I BEEN — Travel Visualizer",
   description:
-    "Upload your GPX, KML, or GeoJSON files and visualize your travels on an interactive cyberpunk-themed map with detailed statistics.",
+    "Upload your Google Timeline, GPX, KML, or GeoJSON travel data and visualize your entire journey on a stunning interactive map with rich statistics, heatmaps, and route animations.",
+  keywords: [
+    "travel visualizer",
+    "Google Timeline",
+    "GPX viewer",
+    "KML viewer",
+    "location history",
+    "travel map",
+    "heatmap",
+    "route animation",
+  ],
+  authors: [{ name: "Where Have I Been" }],
+  openGraph: {
+    title: "WHERE HAVE I BEEN — Travel Visualizer",
+    description:
+      "Upload your travel data and see where you've been. Beautiful heatmaps, route animations, and travel statistics.",
+    type: "website",
+    siteName: "Where Have I Been",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "WHERE HAVE I BEEN — Travel Visualizer",
+    description:
+      "Upload your travel data and see where you've been on a stunning interactive map.",
+  },
+
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#050510",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }) {
