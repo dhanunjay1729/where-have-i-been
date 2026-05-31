@@ -1,8 +1,27 @@
 # 🌍 WHERE HAVE I BEEN
 
+*Honestly, this was just a really fun project! I vibe-coded the whole thing because I just wanted to make an app that tracks all my footprints all over the world.*
+
 A stunning, cyberpunk-themed travel visualization app that transforms your location history into an interactive map experience. Upload your travel data files and watch your journeys come alive with heatmaps, route animations, and rich statistics.
 
+**🚀 Live Demo:** [https://where-have-i-been.vercel.app](https://where-have-i-been.vercel.app)
+
 **100% private** — all processing happens locally in your browser. No data is ever sent to any server.
+
+---
+
+## 📸 Screenshots
+
+*(Add a screenshot here showing the initial Drag and Drop upload zone with the cyberpunk glowing effects)*
+![Upload Screen Placeholder](docs/images/upload-screen.png)
+
+*(Add a screenshot here showing the full map view with route lines and the dark map style)*
+![Map View Placeholder](docs/images/map-view.png)
+
+*(Add a screenshot here showing the expanded sidebar with travel statistics and badges)*
+![Stats Sidebar Placeholder](docs/images/sidebar-stats.png)
+
+---
 
 ## ✨ Features
 
