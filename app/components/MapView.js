@@ -106,13 +106,14 @@ const SRC_ROUTES = "routes";
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function MapView({ geojson, extent, focus, mapStyle = "dark", sidebarOpen, onToggleSidebar }) {
+export default function MapView({ geojson, extent, latest, focus, mapStyle = "dark", sidebarOpen, onToggleSidebar }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const popupRef = useRef(null);
   const [mapError, setMapError] = useState(null);
   const extentRef = useRef(extent);
   const fittedExtentRef = useRef(null);
+  const latestMarkerRef = useRef(null);
   const [coordinates, setCoordinates] = useState(null);
   const dataRef = useRef(null);
   const styleReadyRef = useRef(false);
@@ -479,6 +480,8 @@ export default function MapView({ geojson, extent, focus, mapStyle = "dark", sid
       mapInstanceRef.current = null;
       styleReadyRef.current = false;
       fittedExtentRef.current = null;
+      latestMarkerRef.current?.remove();
+      latestMarkerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -497,6 +500,21 @@ export default function MapView({ geojson, extent, focus, mapStyle = "dark", sid
     // Note: If the style is not loaded yet, the map.on("style.load") listener
     // from the map initialization useEffect will handle injecting the data.
   }, [geojson, extent, injectData]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !latest) {
+      latestMarkerRef.current?.remove();
+      latestMarkerRef.current = null;
+      return;
+    }
+    if (!latestMarkerRef.current) {
+      const dot = document.createElement("div");
+      dot.className = "latest-footprint";
+      dot.setAttribute("aria-hidden", "true");
+      latestMarkerRef.current = new mapboxgl.Marker({ element: dot }).setLngLat(latest.coordinate).addTo(map);
+    } else latestMarkerRef.current.setLngLat(latest.coordinate);
+  }, [latest]);
 
   useEffect(() => {
     if (focus && mapInstanceRef.current) mapInstanceRef.current.easeTo({

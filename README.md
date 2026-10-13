@@ -141,3 +141,7 @@ Run the regression suite with `npm test`.
 ## Explore your history by date
 
 Choose a date range, jump to a month or year, or select a recorded day to see its visit/activity diary. Maps and statistics follow the selected range. Dates use the browser timezone, shown beside the controls. Undated records remain available in the full-history view.
+
+## Progressive timeline playback
+
+Drag the timeline to progressively reveal dated footprints. Play/pause, speed controls, and optional empty-time skipping work within the selected date range. The camera stays fixed during scrubbing. Timed route points are revealed incrementally; routes without point timestamps appear only when complete.
