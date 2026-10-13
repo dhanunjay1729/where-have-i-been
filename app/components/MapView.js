@@ -20,10 +20,6 @@ const MAP_STYLES = {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function deepCloneGeoJSON(data) {
-  // Deep clone to prevent Mapbox Web Worker mutations
-  return JSON.parse(JSON.stringify(data));
-}
 
 function splitGeoJSON(geojson) {
   if (!geojson?.features) return { points: null, lines: null };
@@ -37,7 +33,8 @@ function splitGeoJSON(geojson) {
     // Sanitize properties: remove null/undefined values that crash Mapbox workers
     const cleanProps = {};
     if (feature.properties) {
-      for (const [key, val] of Object.entries(feature.properties)) {
+      for (const key of ["name", "address", "semanticType", "durationMinutes", "arrivalTimestamp", "_recordId"]) {
+        const val = feature.properties[key];
         if (val != null) cleanProps[key] = val;
       }
     }
@@ -109,13 +106,16 @@ const SRC_ROUTES = "routes";
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen, onToggleSidebar }) {
+export default function MapView({ geojson, extent, focus, mapStyle = "dark", sidebarOpen, onToggleSidebar }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const popupRef = useRef(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(null);
+  const extentRef = useRef(extent);
+  const fittedExtentRef = useRef(null);
   const [coordinates, setCoordinates] = useState(null);
   const dataRef = useRef(null);
+  const styleReadyRef = useRef(false);
 
   // Inject data into the map
   const injectData = useCallback((map, data) => {
@@ -127,11 +127,11 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       // ── Add or Update sources ──────────────────────────────────────────────
       if (points) {
         if (map.getSource(SRC_POINTS)) {
-          map.getSource(SRC_POINTS).setData(deepCloneGeoJSON(points));
+          map.getSource(SRC_POINTS).setData(points);
         } else {
           map.addSource(SRC_POINTS, {
             type: "geojson",
-            data: deepCloneGeoJSON(points),
+            data: points,
             cluster: true,
             clusterMaxZoom: 14,
             clusterRadius: 50,
@@ -143,11 +143,11 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
 
       if (lines) {
         if (map.getSource(SRC_ROUTES)) {
-          map.getSource(SRC_ROUTES).setData(deepCloneGeoJSON(lines));
+          map.getSource(SRC_ROUTES).setData(lines);
         } else {
           map.addSource(SRC_ROUTES, {
             type: "geojson",
-            data: deepCloneGeoJSON(lines),
+            data: lines,
           });
         }
       } else if (map.getSource(SRC_ROUTES)) {
@@ -162,10 +162,9 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
           id: "heatmap",
           type: "heatmap",
           source: SRC_POINTS,
-          filter: ["!", ["has", "point_count"]],
           maxzoom: 15,
           paint: {
-            "heatmap-weight": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
+            "heatmap-weight": ["min", 50, ["coalesce", ["get", "point_count"], 1]],
             "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 15, 3],
             "heatmap-color": [
               "interpolate", ["linear"], ["heatmap-density"],
@@ -299,9 +298,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       }
 
       // ── Fly to data bounds ───────────────────────────────────────
-      const bounds = calcBounds(data);
-      if (bounds) {
-        map.fitBounds(bounds, { padding: 80, duration: 2500, essential: true });
+      if (extentRef.current !== fittedExtentRef.current) {
+        const bounds = calcBounds(extentRef.current);
+        if (bounds) map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 800 });
+        fittedExtentRef.current = extentRef.current;
       }
     } catch (err) {
       console.error("[MapView] Data injection error:", err);
@@ -310,7 +310,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
 
   // Initialize Mapbox GL map
   useEffect(() => {
-    if (!mapContainerRef.current || mapInstanceRef.current) return;
+    if (!mapContainerRef.current || mapInstanceRef.current || !mapboxgl.accessToken) return;
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -341,7 +341,8 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
     map.addControl(new mapboxgl.FullscreenControl(), "top-right");
 
     map.on("style.load", () => {
-      setMapReady(true);
+      styleReadyRef.current = true;
+      setMapError(null);
 
       // Add 3D terrain if available
       try {
@@ -373,18 +374,10 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
         // Sky layer may already exist
       }
 
-      // Safe injection loop: Wait for style to be fully ready before adding custom data
-      const tryInject = () => {
-        if (!map || !dataRef.current) return;
-        if (!map.isStyleLoaded()) {
-          setTimeout(tryInject, 100);
-          return;
-        }
-        injectData(map, dataRef.current);
-      };
-      
-      tryInject();
+      if (dataRef.current) injectData(map, dataRef.current);
     });
+
+    map.on("error", () => setMapError("The map could not load. Check your connection or Mapbox access token. Your timeline and statistics are still available."));
 
     // ── Interactive behaviors ──────────────────────────────────────
 
@@ -484,7 +477,8 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       if (popupRef.current) popupRef.current.remove();
       map.remove();
       mapInstanceRef.current = null;
-      setMapReady(false);
+      styleReadyRef.current = false;
+      fittedExtentRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -492,15 +486,24 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
   // Re-inject data when geojson changes
   useEffect(() => {
     dataRef.current = geojson;
+    extentRef.current = extent;
+    popupRef.current?.remove();
     const map = mapInstanceRef.current;
     if (!map || !geojson) return;
 
-    if (map.isStyleLoaded()) {
-      injectData(map, geojson);
-    }
+    // isStyleLoaded() also goes false during tile/source updates. A style that
+    // already emitted style.load can still accept fresh GeoJSON during those updates.
+    if (styleReadyRef.current) injectData(map, geojson);
     // Note: If the style is not loaded yet, the map.on("style.load") listener
     // from the map initialization useEffect will handle injecting the data.
-  }, [geojson, injectData]);
+  }, [geojson, extent, injectData]);
+
+  useEffect(() => {
+    if (focus && mapInstanceRef.current) mapInstanceRef.current.easeTo({
+      center: focus.coordinate, zoom: Math.max(14, mapInstanceRef.current.getZoom()),
+      duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600,
+    });
+  }, [focus]);
 
   const initialStyleMountRef = useRef(true);
 
@@ -517,6 +520,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
     const newStyle = MAP_STYLES[mapStyle] || MAP_STYLES.dark;
     
     try {
+      styleReadyRef.current = false;
       map.setStyle(newStyle);
       // Data will be re-injected on style.load event (set up in init)
     } catch (err) {
@@ -543,7 +547,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
   }, [sidebarOpen]);
 
   return (
-    <div id="map-container" className="flex-1 w-full h-full relative fade-scale-in">
+    <div id="map-container" className="w-full h-full relative">
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Sidebar toggle button (visible when sidebar is closed) */}
@@ -560,12 +564,17 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
         </button>
       )}
 
+      {(!mapboxgl.accessToken || mapError) && <div className="map-service-message" role="status">{mapError || "Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to load the basemap. Your timeline and statistics are ready."}</div>}
+      <button className="fit-journey-button" onClick={() => {
+        const bounds = calcBounds(extent);
+        if (bounds && mapInstanceRef.current) mapInstanceRef.current.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
+      }}>Fit journey</button>
       {/* Status indicator */}
       <div className="absolute top-4 right-[60px] z-10 pointer-events-none">
         <div className="flex items-center gap-2 glass-card px-3 py-1.5 border border-glass-border">
           <div className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />
           <span className="text-[9px] font-mono text-foreground/25 tracking-widest">
-            LIVE
+            HISTORY
           </span>
         </div>
       </div>
@@ -582,7 +591,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
       )}
 
       {/* Legend */}
-      <div className="absolute bottom-8 left-4 z-10 pointer-events-none">
+      <div className="absolute bottom-8 left-4 z-10 pointer-events-none hidden lg:block">
         <div className="glass-card px-3 py-3 border border-glass-border">
           <div className="text-[8px] font-mono text-foreground/20 tracking-[0.2em] mb-2.5">
             LEGEND
@@ -626,7 +635,7 @@ export default function MapView({ geojson, stats, mapStyle = "dark", sidebarOpen
 
 function escapeHtml(str) {
   if (!str) return "";
-  return str
+  return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

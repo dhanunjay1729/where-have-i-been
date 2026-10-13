@@ -1,550 +1,117 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import { RARITY_COLORS } from "../utils/achievements";
+import { useState } from "react";
+import { localDay } from "../utils/journey";
 
-// ─── Formatting helpers ─────────────────────────────────────────────────────
-
-function formatDistance(km) {
-  if (km == null || isNaN(km)) return "—";
-  if (km < 1) return `${(km * 1000).toFixed(0)} m`;
-  if (km > 10000) return `${(km / 1000).toFixed(1)}k km`;
-  if (km > 1000) return `${km.toFixed(0)} km`;
-  return `${km.toFixed(1)} km`;
+const MODES = { IN_PASSENGER_VEHICLE: "Driving", IN_VEHICLE: "Driving", DRIVING: "Driving", WALKING: "Walking", ON_FOOT: "Walking", CYCLING: "Cycling", IN_BUS: "Bus", IN_TRAIN: "Train", IN_SUBWAY: "Subway", FLYING: "Flying", RUNNING: "Running", MOTORCYCLING: "Motorcycle" };
+const STYLES = ["dark", "satellite", "streets", "terrain"];
+export function formatDistance(km) {
+  if (km == null) return "Unavailable";
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
 }
-
 function formatDuration(ms) {
-  if (!ms) return "—";
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
+  if (ms == null) return "Unavailable";
+  const mins = Math.round(ms / 60000);
+  return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+function Metric({ label, value, children }) {
+  return <details className="journey-metric"><summary><span>{label}<span className="metric-info" aria-hidden="true">i</span></span><strong>{value}</strong></summary><p>{children}</p></details>;
 }
 
-function formatDate(date) {
-  if (!date) return "—";
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatNumber(n) {
-  if (n == null) return "—";
-  return n.toLocaleString();
-}
-
-// ─── Animated Counter ───────────────────────────────────────────────────────
-
-function AnimatedNumber({ value, duration = 1200 }) {
-  const ref = useRef(null);
-  const numValue = typeof value === "string" ? parseFloat(value.replace(/,/g, "")) : value;
-  const prevValue = useRef(0);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const target = isNaN(numValue) ? 0 : numValue;
-    if (target === 0) {
-      el.textContent = "0";
-      prevValue.current = 0;
-      return;
-    }
-
-    const start = performance.now();
-    let animId;
-    const tick = (now) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.floor(target * eased);
-      el.textContent = current.toLocaleString();
-      if (progress < 1) {
-        animId = requestAnimationFrame(tick);
-      } else {
-        prevValue.current = target;
-      }
-    };
-    animId = requestAnimationFrame(tick);
-
-    return () => { if (animId) cancelAnimationFrame(animId); };
-  }, [numValue, duration]);
-
-  return <span ref={ref}>0</span>;
-}
-
-// ─── Stat Card ──────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, icon, color = "cyan", delay = 0, isNumeric = false }) {
-  const colorMap = {
-    cyan: { border: "border-neon-cyan/15", text: "text-neon-cyan", glow: "rgba(0,255,245,0.06)" },
-    magenta: { border: "border-neon-magenta/15", text: "text-neon-magenta", glow: "rgba(255,0,255,0.06)" },
-    purple: { border: "border-neon-purple/15", text: "text-neon-purple", glow: "rgba(179,71,255,0.06)" },
-    blue: { border: "border-neon-blue/15", text: "text-neon-blue", glow: "rgba(77,127,255,0.06)" },
-    pink: { border: "border-neon-pink/15", text: "text-neon-pink", glow: "rgba(255,61,138,0.06)" },
-    yellow: { border: "border-neon-yellow/15", text: "text-neon-yellow", glow: "rgba(255,225,77,0.06)" },
-    green: { border: "border-neon-green/15", text: "text-neon-green", glow: "rgba(0,255,136,0.06)" },
+function DateFilters({ journey, range, onRange }) {
+  const [start, setStart] = useState(range?.[0] || localDay(journey.min));
+  const [end, setEnd] = useState(range?.[1] || localDay(journey.max));
+  const [error, setError] = useState("");
+  const months = [...new Set(journey.days.map((d) => d.date.slice(0, 7)))];
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))];
+  const first = localDay(journey.min), last = localDay(journey.max);
+  const apply = (a, b) => {
+    if (!a || !b || a > b) { setError("Choose an end date on or after the start date."); return; }
+    if (b < first || a > last) { setError("Choose dates within your recorded history."); return; }
+    setError(""); onRange([a < first ? first : a, b > last ? last : b]);
   };
-
-  const c = colorMap[color] || colorMap.cyan;
-
-  return (
-    <div
-      className={`stat-card glass-card ${c.border} p-3 transition-all duration-300 hover:bg-surface-hover/60 group/stat fade-in-up`}
-      style={{ animationDelay: `${delay}s` }}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-base group-hover/stat:scale-110 transition-transform">{icon}</span>
-        <span className="text-[9px] uppercase tracking-[0.15em] text-foreground/25 font-mono">
-          {label}
-        </span>
+  return <div className="date-filters">
+    <div className="section-heading"><h2>Explore by date</h2><button className="text-button" onClick={() => onRange(null)} disabled={!range}>All history</button></div>
+    <form onSubmit={(e) => { e.preventDefault(); apply(start, end); }}>
+      <div className="date-fields">
+        <label>From<input aria-label="Start date" type="date" min={first} max={last} value={start} onInput={(e) => setStart(e.currentTarget.value)} onChange={(e) => setStart(e.target.value)} required /></label>
+        <label>To<input aria-label="End date" type="date" min={first} max={last} value={end} onInput={(e) => setEnd(e.currentTarget.value)} onChange={(e) => setEnd(e.target.value)} required /></label>
       </div>
-      <div className={`text-lg font-bold font-mono ${c.text}`}>
-        {isNumeric ? <AnimatedNumber value={value} /> : value}
-      </div>
+      {error && <p className="filter-error" role="alert">{error}</p>}
+      <button className="apply-dates" type="submit">Explore these dates <span aria-hidden="true">↗</span></button>
+    </form>
+    <div className="date-shortcuts">
+      <select aria-label="Jump to year" value="" onChange={(e) => { if (e.target.value) apply(`${e.target.value}-01-01`, `${e.target.value}-12-31`); }}><option value="">Jump to year</option>{years.map((y) => <option key={y}>{y}</option>)}</select>
+      <select aria-label="Jump to month" value="" onChange={(e) => {
+        if (!e.target.value) return;
+        const [y, m] = e.target.value.split("-").map(Number);
+        apply(`${e.target.value}-01`, localDay(new Date(y, m, 0).getTime()));
+      }}><option value="">Jump to month</option>{months.map((m) => <option key={m} value={m}>{new Date(`${m}-01T12:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" })}</option>)}</select>
     </div>
-  );
+    <p className="quiet-note">Dates in {Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll("_", " ")}</p>
+  </div>;
 }
 
-// ─── Section Header ─────────────────────────────────────────────────────────
-
-function SectionHeader({ title, icon, defaultOpen = true, children }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <div className="mb-4">
-      <button
-        onClick={() => setIsOpen((p) => !p)}
-        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-foreground/25 font-mono mb-2 hover:text-foreground/40 transition-colors cursor-pointer group/section"
-      >
-        <span className="flex items-center gap-2">
-          {icon && <span className="text-xs">{icon}</span>}
-          {title}
-        </span>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className={`transition-transform duration-300 ${isOpen ? "rotate-0" : "-rotate-90"}`}
-        >
-          <path d="M3 5l3 3 3-3" />
-        </svg>
-      </button>
-      <div className={`overflow-hidden transition-all duration-400 ${isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"}`}>
-        {children}
-      </div>
-    </div>
-  );
+function DayList({ days, onDay }) {
+  const [limit, setLimit] = useState(21);
+  return <section className="day-section">
+    <div className="section-heading"><h2>Days with footprints</h2><span>{days.length}</span></div>
+    {days.length === 0 && <p className="quiet-note">No dated records in this range. Try a wider range.</p>}
+    <div className="day-list">{days.slice(0, limit).map((d) => {
+      const date = new Date(`${d.date}T12:00:00`);
+      return <button key={d.date} onClick={() => onDay(d.date)} className="day-item" aria-label={`Explore ${date.toLocaleDateString(undefined, { dateStyle: "full" })}`}>
+        <span className="day-calendar"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><strong>{date.getDate()}</strong></span>
+        <span className="day-copy"><strong>{date.toLocaleDateString(undefined, { weekday: "long" })}<small>{date.getFullYear()}</small></strong><span>{[d.visits && `${d.visits} visit${d.visits === 1 ? "" : "s"}`, d.routes && "Travel recorded", d.points && `${d.points} observation${d.points === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</span></span>
+        <span className="day-arrow" aria-hidden="true">↗</span>
+      </button>;
+    })}</div>
+    {days.length > limit && <button className="show-more" onClick={() => setLimit((n) => n + 30)}>Show more days</button>}
+  </section>;
 }
 
-// ─── Travel Mode Chart ──────────────────────────────────────────────────────
-
-const MODE_LABELS = {
-  IN_PASSENGER_VEHICLE: { label: "Driving", icon: "🚗" },
-  IN_VEHICLE: { label: "Driving", icon: "🚗" },
-  DRIVING: { label: "Driving", icon: "🚗" },
-  WALKING: { label: "Walking", icon: "🚶" },
-  ON_FOOT: { label: "On Foot", icon: "🚶" },
-  CYCLING: { label: "Cycling", icon: "🚲" },
-  IN_BUS: { label: "Bus", icon: "🚌" },
-  IN_TRAIN: { label: "Train", icon: "🚆" },
-  IN_SUBWAY: { label: "Subway", icon: "🚇" },
-  IN_TRAM: { label: "Tram", icon: "🚊" },
-  FLYING: { label: "Flying", icon: "✈️" },
-  IN_FERRY: { label: "Ferry", icon: "⛴️" },
-  RUNNING: { label: "Running", icon: "🏃" },
-  MOTORCYCLING: { label: "Motorcycle", icon: "🏍️" },
-  BOATING: { label: "Boating", icon: "🚤" },
-  SKIING: { label: "Skiing", icon: "⛷️" },
-  STILL: { label: "Stationary", icon: "🧍" },
-  UNKNOWN_ACTIVITY_TYPE: { label: "Unknown", icon: "❓" },
-  TIMELINE_PATH: { label: "Tracked", icon: "📍" },
-};
-
-const BAR_COLORS = [
-  "from-neon-cyan to-neon-blue",
-  "from-neon-magenta to-neon-purple",
-  "from-neon-pink to-neon-yellow",
-  "from-neon-green to-neon-cyan",
-  "from-neon-blue to-neon-magenta",
-  "from-neon-purple to-neon-pink",
-];
-
-function TravelModeChart({ modes }) {
-  if (!modes || modes.length === 0) return null;
-  const maxCount = Math.max(...modes.map((m) => m.count));
-
-  return (
-    <div className="flex flex-col gap-2">
-      {modes.slice(0, 6).map((mode, i) => {
-        const info = MODE_LABELS[mode.mode] || { label: mode.mode, icon: "📍" };
-        const pct = (mode.count / maxCount) * 100;
-
-        return (
-          <div key={mode.mode} className="flex items-center gap-2">
-            <span className="text-xs w-5 text-center">{info.icon}</span>
-            <div className="flex-1">
-              <div className="flex justify-between items-center mb-0.5">
-                <span className="text-[10px] font-mono text-foreground/40">{info.label}</span>
-                <span className="text-[10px] font-mono text-foreground/25">{mode.count}×</span>
-              </div>
-              <div className="h-1.5 bg-surface-light/60 rounded-full overflow-hidden">
-                <div
-                  className={`h-full bg-gradient-to-r ${BAR_COLORS[i % BAR_COLORS.length]} rounded-full bar-grow`}
-                  style={{
-                    width: `${pct}%`,
-                    animationDelay: `${i * 0.1}s`,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+function DayDiary({ events, cursor, onEvent }) {
+  const [limit, setLimit] = useState(30);
+  const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return <section className="day-diary">
+    <div className="section-heading"><h2>This day, step by step</h2><span>{events.length} records</span></div>
+    <div className="diary-events">{events.slice(0, limit).map((r) => <button className={`diary-event ${r.start > cursor ? "ahead" : ""}`} key={r.id} onClick={() => onEvent(r)}>
+      <span className="diary-time">{clock(r.start)}</span>
+      <span className="diary-dot" aria-hidden="true" />
+      <span className="diary-copy"><strong>{r.kind === "visit" ? r.properties.name || "Visited place" : r.kind === "activity" ? MODES[r.properties.activityType] || "Travel activity" : r.kind === "route" ? r.properties.name || "Recorded route" : "Location recorded"}</strong>
+        <span>{r.end > r.start ? `Until ${clock(r.end)}` : "Recorded observation"}{r.start > cursor ? " · Ahead" : ""}</span>
+      </span><span className="day-arrow" aria-hidden="true">↗</span>
+    </button>)}</div>
+    {events.length > limit && <button className="show-more" onClick={() => setLimit((n) => n + 30)}>Show more records</button>}
+  </section>;
 }
 
-// ─── Map Style Switcher ─────────────────────────────────────────────────────
-
-const MAP_STYLES = [
-  { id: "dark", label: "Dark", icon: "🌑" },
-  { id: "satellite", label: "Satellite", icon: "🛰️" },
-  { id: "streets", label: "Streets", icon: "🗺️" },
-  { id: "terrain", label: "Terrain", icon: "⛰️" },
-];
-
-function MapStyleSwitcher({ current, onChange }) {
-  return (
-    <div className="grid grid-cols-4 gap-1.5">
-      {MAP_STYLES.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => onChange(s.id)}
-          className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[9px] font-mono transition-all duration-200 cursor-pointer
-            ${current === s.id
-              ? "bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan"
-              : "bg-surface/40 border border-transparent text-foreground/25 hover:bg-surface-light/60 hover:text-foreground/40"
-            }`}
-        >
-          <span className="text-sm">{s.icon}</span>
-          <span className="tracking-wider">{s.label.toUpperCase()}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Sidebar Component ─────────────────────────────────────────────────
-
-export default function Sidebar({
-  stats,
-  fileName,
-  onReset,
-  achievements = [],
-  isOpen = true,
-  onToggle,
-  mapStyle = "dark",
-  onMapStyleChange,
-}) {
-  // Detect if this is a Semantic/Timeline stats shape or generic
-  const isSemanticStats = stats?.totalPlacesVisited !== undefined;
-
-  const statCards = useMemo(() => {
-    if (!stats) return [];
-    const cards = [];
-
-    if (isSemanticStats) {
-      cards.push({
-        label: "Distance",
-        value: formatDistance(stats.totalDistanceTraveledKm),
-        icon: "📏",
-        color: "cyan",
-      });
-      cards.push({
-        label: "Visits",
-        value: stats.totalPlacesVisited,
-        icon: "📍",
-        color: "magenta",
-        isNumeric: true,
-      });
-      cards.push({
-        label: "Route Sections",
-        value: stats.totalRoutes,
-        icon: "🗺️",
-        color: "purple",
-        isNumeric: true,
-      });
-      if (stats.totalActivitySegments > 0) {
-        cards.push({
-          label: "Activity Segments",
-          value: stats.totalActivitySegments,
-          icon: "🚀",
-          color: "blue",
-          isNumeric: true,
-        });
-      }
-      if (stats.travelDuration) {
-        cards.push({ label: "Recorded Travel Time", value: formatDuration(stats.travelDuration), icon: "⏱️", color: "blue" });
-      }
-      if (!stats.totalPlacesVisited && stats.totalPoints) {
-        cards.push({ label: "Data Points", value: stats.totalPoints, icon: "📍", color: "magenta", isNumeric: true });
-      }
-      if (stats.uniquePlacesCount > 0) {
-        cards.push({
-          label: "Unique Places",
-          value: stats.uniquePlacesCount,
-          icon: "🌍",
-          color: "yellow",
-          isNumeric: true,
-        });
-      }
-    } else {
-      cards.push({
-        label: "Distance",
-        value: formatDistance(stats.totalDistance),
-        icon: "📏",
-        color: "cyan",
-      });
-      cards.push({
-        label: "Data Points",
-        value: stats.totalPoints,
-        icon: "📍",
-        color: "magenta",
-        isNumeric: true,
-      });
-      cards.push({
-        label: "Route Sections",
-        value: stats.totalRoutes,
-        icon: "🗺️",
-        color: "purple",
-        isNumeric: true,
-      });
-      if (stats.duration) {
-        cards.push({
-          label: "Duration",
-          value: formatDuration(stats.duration),
-          icon: "⏱️",
-          color: "blue",
-        });
-      }
-      if (stats.avgSpeed) {
-        cards.push({
-          label: "Avg Speed",
-          value: `${stats.avgSpeed.toFixed(1)} km/h`,
-          icon: "⚡",
-          color: "yellow",
-        });
-      }
-      if (stats.maxElevation != null) {
-        cards.push({
-          label: "Max Elevation",
-          value: `${stats.maxElevation.toFixed(0)} m`,
-          icon: "⛰️",
-          color: "pink",
-        });
-      }
-      if (stats.minElevation != null) {
-        cards.push({
-          label: "Min Elevation",
-          value: `${stats.minElevation.toFixed(0)} m`,
-          icon: "🏔️",
-          color: "blue",
-        });
-      }
-      if (stats.totalElevationGain) {
-        cards.push({
-          label: "Elevation Gain",
-          value: `${stats.totalElevationGain.toFixed(0)} m`,
-          icon: "📈",
-          color: "green",
-        });
-      }
-    }
-
-    return cards;
-  }, [stats, isSemanticStats]);
-
-  return (
-    <aside
-      id="sidebar"
-      className={`
-        ${isOpen ? "w-80 md:w-[340px]" : "w-0"}
-        h-full bg-glass-bg backdrop-blur-xl
-        border-r border-glass-border
-        flex flex-col overflow-hidden z-20
-        transition-all duration-400
-        slide-in-left
-        mobile-sidebar md:relative ${isOpen ? "open" : ""}
-      `}
-    >
-      {/* Header */}
-      <div className="p-5 border-b border-glass-border shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold font-mono tracking-wider neon-text">
-            TRAVEL DATA
-          </h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onToggle}
-              className="text-xs font-mono p-1.5 rounded border border-neon-cyan/15 text-neon-cyan/50 hover:bg-neon-cyan/10 hover:text-neon-cyan transition-all duration-300 cursor-pointer md:hidden"
-              title="Close sidebar"
-            >
-              ✕
-            </button>
-            <button
-              onClick={onReset}
-              className="text-[10px] font-mono px-3 py-1.5 rounded-lg border border-neon-magenta/15 text-neon-magenta/70 hover:bg-neon-magenta/10 hover:border-neon-magenta/30 hover:text-neon-magenta transition-all duration-300 cursor-pointer tracking-wider"
-              title="Load a new file"
-              id="reset-button"
-            >
-              ↻ NEW FILE
-            </button>
-          </div>
+export default function Sidebar({ journey, stats, range, days, onRange, onDay, fileName, onReset, isOpen, onToggle, mapStyle, onMapStyleChange, hiddenUndated, dayEvents, onEvent, revealedUntil, achievements = [] }) {
+  const noRecords = stats.visibleRecords === 0;
+  return <aside id="sidebar" className={`journey-sidebar ${isOpen ? "open" : ""}`} aria-label="Journey details" inert={!isOpen}>
+    <header className="journey-brand"><div><span className="eyebrow">A PERSONAL ATLAS</span><h1>Where have I been<span>?</span></h1></div><button className="icon-button" onClick={onToggle} aria-label="Close sidebar">✕</button></header>
+    <div className="journey-file"><span title={fileName}>{fileName}</span><button onClick={onReset} className="text-button">New file</button></div>
+    <div className="journey-sidebar-scroll">
+      {journey.min != null && <DateFilters key={`filters:${range?.join(":") || "all"}`} journey={journey} range={range} onRange={onRange} />}
+      <section className="journey-statistics">
+        <div className="section-heading"><h2>The journey so far</h2><span className="quiet-note">Tap a number for details</span></div>
+        {noRecords && <p className="empty-history">No records in this date range. Choose another date.</p>}
+        <div className="journey-metrics">
+          <Metric label="Recorded distance" value={formatDistance(stats.totalDistance)}>Distances follow recorded route points, never the space between separate tracks. Reported activity distance is used only for completed activities with no overlapping recorded route. Partial reported totals are excluded. This is recorded coverage, not a claim of complete travel.</Metric>
+          <Metric label="Unique places" value={stats.totalPlacesVisited ? stats.uniquePlacesCount.toLocaleString() : "Unavailable"}>Distinct place IDs from visits. When an ID is missing, exact coordinates rounded to six decimals are used. Names such as HOME are not counted as unique places. Raw GPS observations are not visits.</Metric>
+          <Metric label="Visits" value={stats.totalPlacesVisited.toLocaleString()}>Visit records in the selected time window. Returning to the same place counts as another visit. Visits are not dropped just because a route ended nearby.</Metric>
+          <Metric label="Recorded travel time" value={formatDuration(stats.travelDuration)}>The union of timed route and activity intervals. Overlapping intervals count once. Overnight stays and gaps between routes are excluded. This is not moving time; stops within an activity may be included.</Metric>
+          <Metric label="Route sections" value={stats.totalRoutes.toLocaleString()}>Independent recorded paths. Timed gaps over 30 minutes split a path. A section is not necessarily a whole trip.</Metric>
+          <Metric label="Activity segments" value={stats.totalActivitySegments.toLocaleString()}>Transport segments reported by your export. A walk, train ride, and another walk are three segments, not three trips.</Metric>
         </div>
-
-        {/* File name badge */}
-        <div className="flex items-center gap-2 bg-surface/40 rounded-lg px-3 py-2 border border-glass-border">
-          <div className="w-2 h-2 rounded-full bg-neon-green shrink-0 animate-pulse" />
-          <span className="text-xs font-mono text-foreground/40 truncate">
-            {fileName}
-          </span>
-        </div>
-      </div>
-
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {/* Stats grid */}
-        <SectionHeader title="Statistics" icon="📊" defaultOpen={true}>
-          <div className="grid grid-cols-2 gap-2">
-            {statCards.map((card, i) => (
-              <StatCard key={card.label} {...card} delay={i * 0.08} />
-            ))}
-          </div>
-        </SectionHeader>
-
-        {/* Travel Mode Breakdown */}
-        {stats?.topTravelModes?.length > 0 && (
-          <SectionHeader title="Travel Modes" icon="🚀" defaultOpen={true}>
-            <div className="glass-card p-3 border border-glass-border">
-              <TravelModeChart modes={stats.topTravelModes} />
-            </div>
-          </SectionHeader>
-        )}
-
-        {/* Achievements */}
-        {achievements.length > 0 && (
-          <SectionHeader title={`Achievements (${achievements.length})`} icon="🏆" defaultOpen={true}>
-            <div className="flex flex-col gap-2">
-              {achievements.map((ach, i) => {
-                const colors = RARITY_COLORS[ach.rarity] || RARITY_COLORS.common;
-                return (
-                  <div
-                    key={ach.id}
-                    className={`glass-card ${colors.border} ${colors.bg} p-2.5 badge-pop flex items-start gap-2.5`}
-                    style={{ animationDelay: `${i * 0.12}s` }}
-                  >
-                    <span className="text-xl mt-0.5">{ach.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-mono font-bold ${colors.text}`}>
-                          {ach.title}
-                        </span>
-                        <span className={`text-[8px] font-mono uppercase tracking-widest ${colors.text} opacity-60`}>
-                          {ach.rarity}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-foreground/30 leading-tight">
-                        {ach.description}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionHeader>
-        )}
-
-        {/* Time range section */}
-        {stats?.startTime && (
-          <SectionHeader title="Time Range" icon="📅" defaultOpen={true}>
-            <div className="glass-card p-3 border border-glass-border">
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-foreground/30">
-                    START
-                  </span>
-                  <span className="text-xs font-mono text-neon-cyan">
-                    {formatDate(stats.startTime)}
-                  </span>
-                </div>
-                <div className="w-full h-px bg-gradient-to-r from-neon-cyan/20 via-neon-magenta/20 to-neon-purple/20" />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-foreground/30">
-                    END
-                  </span>
-                  <span className="text-xs font-mono text-neon-magenta">
-                    {formatDate(stats.endTime)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </SectionHeader>
-        )}
-
-        {/* Bounding box */}
-        {stats?.bounds && (
-          <SectionHeader title="Bounding Box" icon="📐" defaultOpen={false}>
-            <div className="glass-card p-3 border border-glass-border">
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                <div className="text-foreground/25">
-                  N <span className="text-neon-purple">{stats.bounds[1][0].toFixed(4)}°</span>
-                </div>
-                <div className="text-foreground/25 text-right">
-                  E <span className="text-neon-purple">{stats.bounds[1][1].toFixed(4)}°</span>
-                </div>
-                <div className="text-foreground/25">
-                  S <span className="text-neon-purple">{stats.bounds[0][0].toFixed(4)}°</span>
-                </div>
-                <div className="text-foreground/25 text-right">
-                  W <span className="text-neon-purple">{stats.bounds[0][1].toFixed(4)}°</span>
-                </div>
-              </div>
-            </div>
-          </SectionHeader>
-        )}
-
-        {/* Map Style */}
-        <SectionHeader title="Map Style" icon="🎨" defaultOpen={false}>
-          <MapStyleSwitcher current={mapStyle} onChange={onMapStyleChange} />
-        </SectionHeader>
-      </div>
-
-      {/* Footer */}
-      <div className="p-4 border-t border-glass-border shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="text-[8px] font-mono text-foreground/15 tracking-widest">
-            WHERE HAVE I BEEN v2.0
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />
-            <span className="text-[8px] font-mono text-foreground/15 tracking-wider">
-              LOCAL
-            </span>
-          </div>
-        </div>
-      </div>
-    </aside>
-  );
+        <details className="data-notes"><summary>About these numbers</summary><p>All numbers follow the selected date range. An unavailable value means the export cannot support it.</p><p>Average speed: <strong>{stats.avgSpeed == null ? "Unavailable" : `${stats.avgSpeed.toFixed(1)} km/h`}</strong>. Shown only when distance and timing can be matched without overlapping activity estimates.</p>{stats.maxElevation != null && <p>Highest elevation: {Math.round(stats.maxElevation)} m · Recorded ascent: {Math.round(stats.totalElevationGain || 0)} m.</p>}<p>{journey.gaps} recording gaps split. {journey.skipped} invalid or unsupported observations skipped.</p>{stats.overlappingActivities > 0 && <p>{stats.overlappingActivities} overlapping activity distance totals excluded to avoid counting the same travel twice.</p>}</details>
+        {hiddenUndated > 0 && <p className="coverage-note">{hiddenUndated} undated item{hiddenUndated === 1 ? " is" : "s are"} hidden while filtering. Choose All history to see them.</p>}
+      </section>
+      {stats.topTravelModes.length > 0 && <section className="journey-modes"><div className="section-heading"><h2>How you travelled</h2><span>Segments</span></div>{stats.topTravelModes.slice(0, 6).map((m) => <div className="mode-row" key={m.mode}><span>{MODES[m.mode] || m.mode.toLowerCase().replaceAll("_", " ")}</span><div><i style={{ width: `${m.count / stats.topTravelModes[0].count * 100}%` }} /></div><strong>{m.count}</strong></div>)}</section>}
+      {range?.[0] === range?.[1] && dayEvents.length > 0 && <DayDiary key={`diary:${range?.[0]}`} events={dayEvents} cursor={revealedUntil} onEvent={onEvent} />}
+      {journey.min != null && <DayList key={`days:${range?.join(":") || "all"}`} days={days} onDay={onDay} />}
+      <details className="appearance-options"><summary>Map appearance</summary><div className="map-style-options">{STYLES.map((style) => <button key={style} aria-pressed={mapStyle === style} onClick={() => onMapStyleChange(style)}>{style}</button>)}</div></details>
+      {achievements.length > 0 && <details className="appearance-options"><summary>Travel milestones <span>{achievements.length}</span></summary><div className="milestone-list">{achievements.map((a) => <div key={a.id}><span aria-hidden="true">{a.icon}</span><div><strong>{a.title}</strong><p>{a.description}</p></div></div>)}</div></details>}
+    </div>
+    <footer className="journey-sidebar-footer"><i />History processed on your device</footer>
+  </aside>;
 }

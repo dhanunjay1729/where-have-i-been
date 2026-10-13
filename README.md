@@ -137,3 +137,7 @@ Built with [Next.js](https://nextjs.org), [Mapbox GL JS](https://mapbox.com), an
 Travel statistics preserve independent route boundaries, distinguish visits from unique places, and exclude overlapping activity distance estimates. Recorded travel time excludes gaps between activities; unavailable distance or speed is not invented. Place identity uses source place IDs, with coordinates as a fallback.
 
 Run the regression suite with `npm test`.
+
+## Explore your history by date
+
+Choose a date range, jump to a month or year, or select a recorded day to see its visit/activity diary. Maps and statistics follow the selected range. Dates use the browser timezone, shown beside the controls. Undated records remain available in the full-history view.
