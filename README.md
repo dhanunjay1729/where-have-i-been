@@ -131,3 +131,9 @@ MIT
 ---
 
 Built with [Next.js](https://nextjs.org), [Mapbox GL JS](https://mapbox.com), and a love for travel 🌏
+
+## Statistics validation
+
+Travel statistics preserve independent route boundaries, distinguish visits from unique places, and exclude overlapping activity distance estimates. Recorded travel time excludes gaps between activities; unavailable distance or speed is not invented. Place identity uses source place IDs, with coordinates as a fallback.
+
+Run the regression suite with `npm test`.

@@ -268,37 +268,43 @@ export default function Sidebar({
     if (isSemanticStats) {
       cards.push({
         label: "Distance",
-        value: formatDistance(stats.totalDistanceTraveledKm || 0),
+        value: formatDistance(stats.totalDistanceTraveledKm),
         icon: "📏",
         color: "cyan",
       });
       cards.push({
-        label: "Places Visited",
+        label: "Visits",
         value: stats.totalPlacesVisited,
         icon: "📍",
         color: "magenta",
         isNumeric: true,
       });
       cards.push({
-        label: "Features",
-        value: stats.totalFeatures,
+        label: "Route Sections",
+        value: stats.totalRoutes,
         icon: "🗺️",
         color: "purple",
         isNumeric: true,
       });
       if (stats.totalActivitySegments > 0) {
         cards.push({
-          label: "Trips",
+          label: "Activity Segments",
           value: stats.totalActivitySegments,
           icon: "🚀",
           color: "blue",
           isNumeric: true,
         });
       }
-      if (stats.uniqueCitiesCount > 0) {
+      if (stats.travelDuration) {
+        cards.push({ label: "Recorded Travel Time", value: formatDuration(stats.travelDuration), icon: "⏱️", color: "blue" });
+      }
+      if (!stats.totalPlacesVisited && stats.totalPoints) {
+        cards.push({ label: "Data Points", value: stats.totalPoints, icon: "📍", color: "magenta", isNumeric: true });
+      }
+      if (stats.uniquePlacesCount > 0) {
         cards.push({
           label: "Unique Places",
-          value: stats.uniqueCitiesCount,
+          value: stats.uniquePlacesCount,
           icon: "🌍",
           color: "yellow",
           isNumeric: true,
@@ -319,8 +325,8 @@ export default function Sidebar({
         isNumeric: true,
       });
       cards.push({
-        label: "Features",
-        value: stats.totalFeatures,
+        label: "Route Sections",
+        value: stats.totalRoutes,
         icon: "🗺️",
         color: "purple",
         isNumeric: true,

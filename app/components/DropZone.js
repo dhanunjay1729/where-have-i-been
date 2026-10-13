@@ -9,7 +9,7 @@ const SUPPORTED_FORMATS = [
   { ext: "JSON", desc: "Google Timeline" },
 ];
 
-export default function DropZone({ onFileLoaded }) {
+export default function DropZone({ onFileLoaded, onError }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -89,7 +89,7 @@ export default function DropZone({ onFileLoaded }) {
 
   const handleFile = useCallback(
     async (file) => {
-      if (!file) return;
+      if (!file || isLoading) return;
       setIsLoading(true);
       setLoadProgress(0);
       setLoadStage("READING FILE...");
@@ -124,14 +124,17 @@ export default function DropZone({ onFileLoaded }) {
         // Completion animation delay
         await new Promise((r) => setTimeout(r, 500));
         onFileLoaded(file.name, text);
+        setIsLoading(false);
+        setLoadProgress(0);
       } catch (err) {
+        onError?.(err.message || "The file could not be read. Please try again.");
         clearInterval(progressInterval);
         setIsLoading(false);
         setLoadProgress(0);
         setLoadStage("");
       }
     },
-    [onFileLoaded]
+    [onFileLoaded, onError, isLoading]
   );
 
   const handleDrop = useCallback(
@@ -327,7 +330,7 @@ export default function DropZone({ onFileLoaded }) {
         type="file"
         accept=".gpx,.kml,.geojson,.json"
         className="hidden"
-        onChange={handleInputChange}
+        onChange={(e) => { handleInputChange(e); e.target.value = ""; }}
         id="file-input"
       />
     </div>

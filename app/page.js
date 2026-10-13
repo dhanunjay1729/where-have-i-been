@@ -43,7 +43,7 @@ export default function Home() {
     try {
       const { geojson: parsedGeojson, stats: parsedStats } = parseFile(name, content);
 
-      if (!parsedGeojson.features || parsedGeojson.features.length === 0) {
+      if (!parsedGeojson.features || (parsedGeojson.features.length === 0 && !parsedStats?.visibleRecords)) {
         setError("No geographic features found in this file.");
         return;
       }
@@ -95,7 +95,7 @@ export default function Home() {
       <main id="app-root" className="h-screen w-screen flex overflow-hidden relative">
         {appState === "upload" && (
           <div className="flex-1 flex flex-col">
-            <DropZone onFileLoaded={handleFileLoaded} />
+            <DropZone onFileLoaded={handleFileLoaded} onError={setError} />
 
             {error && (
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 fade-in-up">

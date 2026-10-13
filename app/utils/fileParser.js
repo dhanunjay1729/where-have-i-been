@@ -1,775 +1,149 @@
 import { gpx, kml } from "@tmcw/togeojson";
+import { createJourney, selectHistory, timestamp, validCoordinate } from "./journey.js";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
+const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
+const point = (coordinate) => coordinate ? { type: "Point", coordinates: coordinate } : null;
 
-const COORD_PRECISION = 6;
-const E7_DIVISOR = 1e7;
-const EARTH_RADIUS_KM = 6371;
-const DEDUP_THRESHOLD_KM = 0.015; // 15 meters
-const DEG_TO_RAD = Math.PI / 180;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Public API
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parse an uploaded file (File object) into GeoJSON + stats.
- * Supports: .gpx, .kml, .geojson, .json (including Google Takeout Semantic Location History)
- *
- * @param {string} fileName – the file name (used for extension detection)
- * @param {string} fileContent – raw text content of the file
- * @returns {{ geojson: object, stats: object|null }}
- */
-export function parseFile(fileName, fileContent) {
-  const ext = fileName.toLowerCase().split(".").pop();
-
-  if (ext === "geojson" || ext === "json") {
-    try {
-      const data = JSON.parse(fileContent);
-
-      // Standard GeoJSON pass-through
-      if (data.type === "FeatureCollection" || data.type === "Feature") {
-        const geojson =
-          data.type === "Feature"
-            ? { type: "FeatureCollection", features: [data] }
-            : data;
-        return { geojson, stats: calculateStats(geojson) };
-      }
-
-      // Google Takeout – Semantic Location History (timelineObjects)
-      if (data.timelineObjects) {
-        return parseSemanticLocationHistory(data);
-      }
-
-      // Google Takeout – New Timeline.json format (semanticSegments)
-      if (data.semanticSegments) {
-        return parseTimelineJson(data);
-      }
-
-      // Google Takeout – Records.json (locations array)
-      if (data.locations) {
-        const geojson = parseGoogleRecordsJson(data);
-        return { geojson, stats: calculateStats(geojson) };
-      }
-
-      throw new Error("Unrecognized JSON format");
-    } catch (e) {
-      if (e.message === "Unrecognized JSON format") throw e;
-      throw new Error(`Failed to parse JSON: ${e.message}`);
-    }
-  }
-
-  if (ext === "gpx" || ext === "kml") {
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(fileContent, "text/xml");
-      const geojson = ext === "gpx" ? gpx(doc) : kml(doc);
-      return { geojson, stats: calculateStats(geojson) };
-    } catch (e) {
-      throw new Error(`Failed to parse ${ext.toUpperCase()}: ${e.message}`);
-    }
-  }
-
-  throw new Error(
-    `Unsupported file type: .${ext}. Please upload .gpx, .kml, .geojson, or .json`
-  );
+function latLng(input) {
+  if (input && typeof input === "object") input = input.latLng ?? input.latlng ?? input.location;
+  if (typeof input !== "string") return null;
+  const values = input.replace(/^geo:/, "").replace(/°/g, "").split(",").map(Number);
+  const c = [values[1], values[0]];
+  return validCoordinate(c) ? c : null;
+}
+function e7(location, latKey = "latitudeE7", lngKey = "longitudeE7") {
+  if (location?.[latKey] == null || location?.[lngKey] == null) return null;
+  const c = [Number(location[lngKey]) / 1e7, Number(location[latKey]) / 1e7];
+  return validCoordinate(c) ? c : null;
+}
+function duration(start, end) {
+  const a = timestamp(start), b = timestamp(end);
+  return a != null && b != null && b >= a ? (b - a) / 60000 : null;
+}
+function line(coordinates) {
+  return coordinates.length >= 2 ? { type: "LineString", coordinates } : point(coordinates[0]);
 }
 
-/**
- * Read a File object via FileReader and return parsed results.
- * Wraps parseFile in a Promise for async / drag-and-drop workflows.
- *
- * @param {File} file – browser File object
- * @returns {Promise<{ geojson: object, stats: object|null }>}
- */
-export function parseFileAsync(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        resolve(parseFile(file.name, reader.result));
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(new Error("FileReader error"));
-    reader.readAsText(file);
+function modernTimeline(segments) {
+  if (!Array.isArray(segments)) throw new Error("semanticSegments must be an array.");
+  const features = [];
+  for (const seg of segments) {
+    if (!seg || typeof seg !== "object") continue;
+    const startTimestamp = seg.startTime, endTimestamp = seg.endTime;
+    if (seg.visit?.topCandidate) {
+      const candidate = seg.visit.topCandidate;
+      const coordinate = latLng(candidate.placeLocation);
+      if (coordinate) features.push(feature(point(coordinate), {
+        _type: "placeVisit", name: candidate.name || candidate.semanticType || "Visited place",
+        placeId: candidate.placeID || candidate.placeId, semanticType: candidate.semanticType,
+        arrivalTimestamp: startTimestamp, departureTimestamp: endTimestamp,
+        durationMinutes: duration(startTimestamp, endTimestamp),
+      }));
+    }
+    if (seg.activity) {
+      const act = seg.activity;
+      // Preserve metadata without inventing a straight-line route between endpoints.
+      features.push(feature(null, {
+        _type: "activitySegment", activityType: act.topCandidate?.type?.toUpperCase(),
+        distanceMeters: act.distanceMeters == null ? null : Number(act.distanceMeters),
+        startTimestamp, endTimestamp, durationMinutes: duration(startTimestamp, endTimestamp),
+      }));
+    }
+    // Some exports put a path alongside an activity; process both independently.
+    if (Array.isArray(seg.timelinePath) && seg.timelinePath.length) {
+      const coordinates = seg.timelinePath.map((p) => latLng(p.point) || [NaN, NaN]);
+      const coordTimes = seg.timelinePath.map((p) => {
+        if (p.time) return p.time;
+        const start = timestamp(startTimestamp);
+        return start != null && p.durationMinutesOffsetFromStartTime != null
+          ? start + Number(p.durationMinutesOffsetFromStartTime) * 60000 : null;
+      });
+      features.push(feature(line(coordinates), {
+        _type: "timelinePath", activityType: "TIMELINE_PATH", startTimestamp, endTimestamp, coordTimes,
+      }));
+    }
+  }
+  return features;
+}
+
+function legacyTimeline(objects) {
+  if (!Array.isArray(objects)) throw new Error("timelineObjects must be an array.");
+  const features = [];
+  for (const obj of objects) {
+    if (obj?.placeVisit) {
+      const visit = obj.placeVisit, loc = visit.location;
+      const coordinate = e7(loc);
+      const start = visit.duration?.startTimestamp ?? visit.duration?.startTimestampMs;
+      const end = visit.duration?.endTimestamp ?? visit.duration?.endTimestampMs;
+      if (coordinate) features.push(feature(point(coordinate), {
+        _type: "placeVisit", name: loc.name || "Visited place", placeId: loc.placeId, address: loc.address,
+        arrivalTimestamp: start, departureTimestamp: end, durationMinutes: duration(start, end),
+      }));
+    }
+    if (obj?.activitySegment) {
+      const act = obj.activitySegment;
+      const startTimestamp = act.duration?.startTimestamp ?? act.duration?.startTimestampMs;
+      const endTimestamp = act.duration?.endTimestamp ?? act.duration?.endTimestampMs;
+      const props = {
+        _type: "activitySegment", activityType: act.activityType,
+        distanceMeters: act.distance ?? null, startTimestamp, endTimestamp,
+        durationMinutes: duration(startTimestamp, endTimestamp),
+      };
+      const raw = act.simplifiedRawPath?.points || act.waypointPath?.waypoints;
+      // Store reported activity separately so date filtering can retain its timing.
+      features.push(feature(null, props));
+      if (raw?.length >= 2) features.push(feature(line(raw.map((p) =>
+        e7(p) || e7(p, "latE7", "lngE7") || [NaN, NaN])), {
+        _type: "timelinePath", startTimestamp, endTimestamp,
+        coordTimes: raw.map((p) => p.timestamp ?? p.timestampMs ?? null),
+      }));
+    }
+  }
+  return features;
+}
+
+function googleRecords(locations) {
+  if (!Array.isArray(locations)) throw new Error("locations must be an array.");
+  // Isolated observations are not continuous tracks. Never invent distance
+  // between them or infer a route through a recording gap.
+  return locations.flatMap((loc) => {
+    const c = e7(loc) || [Number(loc.longitude ?? loc.lng ?? loc.lon), Number(loc.latitude ?? loc.lat)];
+    return validCoordinate(c) ? [feature(point(c), { timestamp: loc.timestamp ?? loc.timestampMs })] : [];
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Semantic Location History Parser  (timelineObjects)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Core parser for Google Takeout "Semantic Location History" JSON.
- * Processes the top-level `timelineObjects` array and produces:
- *   - A clean GeoJSON FeatureCollection
- *   - An aggregated stats object
- *
- * @param {{ timelineObjects: Array }} data
- * @returns {{ geojson: object, stats: object }}
- */
-function parseSemanticLocationHistory(data) {
-  const timelineObjects = data.timelineObjects;
-  if (!Array.isArray(timelineObjects)) {
-    throw new Error("timelineObjects is not an array");
-  }
-
-  const features = [];
-
-  // Accumulators for stats
-  let totalPlacesVisited = 0;
-  let totalDistanceTraveled = 0; // in meters
-  let totalActivitySegmentsCount = 0;
-  const travelModeCounts = new Map();
-  const citySet = new Set();
-
-  // Previous point coordinate for deduplication (across features)
-  let prevCoord = null;
-
-  for (let i = 0, len = timelineObjects.length; i < len; i++) {
-    const obj = timelineObjects[i];
-
-    if (obj.placeVisit) {
-      const feature = processPlaceVisit(obj.placeVisit, prevCoord);
-      if (feature) {
-        features.push(feature);
-        totalPlacesVisited++;
-        prevCoord = feature.geometry.coordinates;
-
-        // Rough city inference from location name
-        const name = feature.properties.name;
-        if (name) {
-          citySet.add(name);
-        }
-      }
-    } else if (obj.activitySegment) {
-      totalActivitySegmentsCount++;
-      const result = processActivitySegment(obj.activitySegment, prevCoord);
-      if (result.feature) {
-        features.push(result.feature);
-        prevCoord = result.lastCoord || prevCoord;
-      }
-
-      // Accumulate distance
-      if (result.distance > 0) {
-        totalDistanceTraveled += result.distance;
-      }
-
-      // Accumulate travel mode
-      if (result.activityType) {
-        travelModeCounts.set(
-          result.activityType,
-          (travelModeCounts.get(result.activityType) || 0) + 1
-        );
-      }
+export function parseFile(fileName, content) {
+  const ext = fileName.toLowerCase().split(".").pop();
+  let geojson;
+  if (ext === "json" || ext === "geojson") {
+    let data;
+    try { data = JSON.parse(content); } catch { throw new Error("This file is not valid JSON. Please choose a fresh export."); }
+    if (!data || typeof data !== "object") throw new Error("No location data found in this JSON file.");
+    if (data.type === "FeatureCollection" && Array.isArray(data.features)) geojson = data;
+    else if (data.type === "Feature") geojson = { type: "FeatureCollection", features: [data] };
+    else {
+      let features;
+      if (data.semanticSegments) features = modernTimeline(data.semanticSegments);
+      else if (data.timelineObjects) features = legacyTimeline(data.timelineObjects);
+      else if (data.locations) features = googleRecords(data.locations);
+      else throw new Error("Unrecognized JSON format. Choose GeoJSON or a Google Timeline export.");
+      geojson = { type: "FeatureCollection", features };
     }
-  }
-
-  // Build sorted travel modes array
-  const topTravelModes = [...travelModeCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([mode, count]) => ({ mode, count }));
-
-  const geojson = { type: "FeatureCollection", features };
-
-  const stats = {
-    totalPlacesVisited,
-    totalDistanceTraveled, // meters
-    totalDistanceTraveledKm: +(totalDistanceTraveled / 1000).toFixed(2),
-    uniqueCities: [...citySet],
-    uniqueCitiesCount: citySet.size,
-    topTravelModes,
-    totalFeatures: features.length,
-    totalActivitySegments: totalActivitySegmentsCount,
-  };
-
-  return { geojson, stats };
+  } else if (ext === "gpx" || ext === "kml") {
+    const doc = new DOMParser().parseFromString(content, "text/xml");
+    if (doc.querySelector("parsererror")) throw new Error(`This ${ext.toUpperCase()} file contains invalid XML.`);
+    geojson = ext === "gpx" ? gpx(doc) : kml(doc);
+  } else throw new Error("Please choose a .gpx, .kml, .geojson, or .json file.");
+  const journey = createJourney(geojson);
+  if (!journey.records.length) throw new Error("No usable location records found in this file.");
+  const snapshot = selectHistory(journey);
+  return { ...snapshot, journey };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Node Processors
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Process a single `placeVisit` node into a GeoJSON Point feature.
- *
- * @param {object} pv – the placeVisit object
- * @param {number[]|null} prevCoord – previous coordinate for dedup
- * @returns {object|null} GeoJSON Feature or null if filtered
- */
-function processPlaceVisit(pv, prevCoord) {
-  const loc = pv.location;
-  if (!loc) return null;
-
-  const lat = convertE7(loc.latitudeE7);
-  const lng = convertE7(loc.longitudeE7);
-  if (lat == null || lng == null) return null;
-
-  const coord = [capPrecision(lng), capPrecision(lat)];
-
-  // Dedup: skip if within 15m of the previous point
-  if (prevCoord && haversineKm(prevCoord, coord) < DEDUP_THRESHOLD_KM) {
-    return null;
-  }
-
-  // Duration parsing
-  const duration = pv.duration || {};
-  const startTs = duration.startTimestamp || duration.startTimestampMs || null;
-  const endTs = duration.endTimestamp || duration.endTimestampMs || null;
-
-  let durationMinutes = null;
-  if (startTs && endTs) {
-    const diffMs = new Date(endTs).getTime() - new Date(startTs).getTime();
-    if (diffMs > 0) {
-      durationMinutes = +(diffMs / 60000).toFixed(1);
-    }
-  }
-
-  return {
-    type: "Feature",
-    geometry: {
-      type: "Point",
-      coordinates: coord,
-    },
-    properties: {
-      _type: "placeVisit",
-      name: loc.name || null,
-      placeId: loc.placeId || null,
-      address: loc.address || null,
-      arrivalTimestamp: startTs,
-      departureTimestamp: endTs,
-      durationMinutes,
-    },
-  };
-}
-
-/**
- * Process a single `activitySegment` node into a GeoJSON Feature.
- * If `waypointPath.waypoints` exists → LineString geometry.
- * Otherwise returns metadata only (feature may be null).
- *
- * @param {object} seg – the activitySegment object
- * @param {number[]|null} prevCoord – for dedup of start/end locations
- * @returns {{ feature: object|null, distance: number, activityType: string|null, lastCoord: number[]|null }}
- */
-function processActivitySegment(seg, prevCoord) {
-  const activityType = seg.activityType || null;
-  const distance = seg.distance || 0; // meters
-
-  const duration = seg.duration || {};
-  const startTs = duration.startTimestamp || duration.startTimestampMs || null;
-  const endTs = duration.endTimestamp || duration.endTimestampMs || null;
-
-  let durationMinutes = null;
-  if (startTs && endTs) {
-    const diffMs = new Date(endTs).getTime() - new Date(startTs).getTime();
-    if (diffMs > 0) {
-      durationMinutes = +(diffMs / 60000).toFixed(1);
-    }
-  }
-
-  // Attempt to build a LineString from waypointPath
-  const wp = seg.waypointPath;
-  let coordinates = null;
-  let lastCoord = null;
-
-  if (wp && Array.isArray(wp.waypoints) && wp.waypoints.length >= 2) {
-    const raw = wp.waypoints;
-    const coords = [];
-
-    for (let i = 0, len = raw.length; i < len; i++) {
-      const pt = raw[i];
-      const lat = convertE7(pt.latE7);
-      const lng = convertE7(pt.lngE7);
-      if (lat == null || lng == null) continue;
-      const c = [capPrecision(lng), capPrecision(lat)];
-
-      // Dedup consecutive points within 15m
-      if (coords.length > 0) {
-        if (haversineKm(coords[coords.length - 1], c) < DEDUP_THRESHOLD_KM) {
-          continue;
-        }
-      } else if (prevCoord) {
-        // First point: compare with the global previous coord
-        if (haversineKm(prevCoord, c) < DEDUP_THRESHOLD_KM) {
-          continue;
-        }
-      }
-
-      coords.push(c);
-    }
-
-    if (coords.length >= 2) {
-      coordinates = coords;
-      lastCoord = coords[coords.length - 1];
-    }
-  }
-
-  // We no longer fallback to a 2-point straight line between start and end.
-  // This ensures we only render paths where actual waypoints are available.
-  if (!coordinates) {
-    // No geometry to create, but still count distance + mode
-    return { feature: null, distance, activityType, lastCoord: null };
-  }
-
-  const feature = {
-    type: "Feature",
-    geometry: {
-      type: "LineString",
-      coordinates,
-    },
-    properties: {
-      _type: "activitySegment",
-      activityType,
-      distanceMeters: distance,
-      distanceKm: distance > 0 ? +(distance / 1000).toFixed(2) : null,
-      startTimestamp: startTs,
-      endTimestamp: endTs,
-      durationMinutes,
-      waypointCount: coordinates.length,
-    },
-  };
-
-  return { feature, distance, activityType, lastCoord };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// New Google Timeline.json Parser  (semanticSegments)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parse the modern Google Timeline.json export (2024+ device-based export).
- * Top-level key is `semanticSegments`, each containing one of:
- *   - `visit`        → Point feature (place stayed at)
- *   - `activity`     → LineString from start→end
- *   - `timelinePath` → LineString from array of waypoints
- *
- * Coordinates are string-formatted: "lat°, lng°" (e.g. "49.3817572°, 8.5769077°")
- *
- * @param {{ semanticSegments: Array }} data
- * @returns {{ geojson: object, stats: object }}
- */
-function parseTimelineJson(data) {
-  const segments = data.semanticSegments;
-  if (!Array.isArray(segments)) {
-    throw new Error("semanticSegments is not an array");
-  }
-
-  const features = [];
-
-  // Accumulators for stats
-  let totalPlacesVisited = 0;
-  let totalDistanceTraveled = 0; // meters
-  let totalActivitySegmentsCount = 0;
-  const travelModeCounts = new Map();
-  const travelModeDistance = new Map();
-  const placeNames = new Set();
-  let prevCoord = null;
-
-  for (let i = 0, len = segments.length; i < len; i++) {
-    const seg = segments[i];
-    const startTime = seg.startTime || null;
-    const endTime = seg.endTime || null;
-
-    // ── Visit segment ──────────────────────────────────────────
-    if (seg.visit) {
-      const visit = seg.visit;
-      const candidate = visit.topCandidate;
-      if (!candidate) continue;
-
-      const coord = parseLatLngString(candidate.placeLocation);
-      if (!coord) continue;
-
-      // Dedup: skip if within 15m of previous point
-      if (prevCoord && haversineKm(prevCoord, coord) < DEDUP_THRESHOLD_KM) {
-        continue;
-      }
-
-      let durationMinutes = null;
-      if (startTime && endTime) {
-        const diffMs = new Date(endTime).getTime() - new Date(startTime).getTime();
-        if (diffMs > 0) durationMinutes = +(diffMs / 60000).toFixed(1);
-      }
-
-      const name = candidate.placeID || null;
-      const semanticType = candidate.semanticType || null;
-
-      const props = {
-        _type: "placeVisit"
-      };
-      if (semanticType || name) props.name = semanticType || name;
-      if (candidate.placeID) props.placeId = candidate.placeID;
-      if (candidate.probability) props.probability = parseFloat(candidate.probability);
-      if (semanticType) props.semanticType = semanticType;
-      if (startTime) props.arrivalTimestamp = startTime;
-      if (endTime) props.departureTimestamp = endTime;
-      if (durationMinutes !== null) props.durationMinutes = durationMinutes;
-
-      features.push({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: coord },
-        properties: props,
-      });
-
-      totalPlacesVisited++;
-      prevCoord = coord;
-      if (semanticType) placeNames.add(semanticType);
-
-    // ── Activity segment ───────────────────────────────────────
-    } else if (seg.activity) {
-      totalActivitySegmentsCount++;
-      const act = seg.activity;
-      // act.start / act.end can be either a string ("geo:lat,lng")
-      // or an object like { latLng: "geo:lat,lng" }
-      const startCoord = parseLatLngString(act.start);
-      const endCoord = parseLatLngString(act.end);
-      const rawType = act.topCandidate?.type || null;
-      // Normalize to uppercase for consistent label matching in sidebar
-      const activityType = rawType ? rawType.toUpperCase() : null;
-      const distance = act.distanceMeters
-        ? parseFloat(act.distanceMeters)
-        : 0;
-
-      let durationMinutes = null;
-      if (startTime && endTime) {
-        const diffMs = new Date(endTime).getTime() - new Date(startTime).getTime();
-        if (diffMs > 0) durationMinutes = +(diffMs / 60000).toFixed(1);
-      }
-
-      if (endCoord) {
-        prevCoord = endCoord;
-      }
-
-      if (distance > 0) totalDistanceTraveled += distance;
-      if (activityType) {
-        travelModeCounts.set(
-          activityType,
-          (travelModeCounts.get(activityType) || 0) + 1
-        );
-        travelModeDistance.set(
-          activityType,
-          (travelModeDistance.get(activityType) || 0) + distance
-        );
-      }
-
-    // ── TimelinePath segment ───────────────────────────────────
-    } else if (seg.timelinePath) {
-      const pathPoints = seg.timelinePath;
-      if (!Array.isArray(pathPoints) || pathPoints.length < 2) continue;
-
-      const coords = [];
-      for (let j = 0; j < pathPoints.length; j++) {
-        const pt = pathPoints[j];
-        const c = parseLatLngString(pt.point);
-        if (!c) continue;
-
-        // Dedup consecutive within 15m
-        if (coords.length > 0) {
-          if (haversineKm(coords[coords.length - 1], c) < DEDUP_THRESHOLD_KM) {
-            continue;
-          }
-        } else if (prevCoord) {
-          if (haversineKm(prevCoord, c) < DEDUP_THRESHOLD_KM) {
-            continue;
-          }
-        }
-        coords.push(c);
-      }
-
-      if (coords.length >= 2) {
-        // Calculate path distance
-        let pathDist = 0;
-        for (let j = 1; j < coords.length; j++) {
-          pathDist += haversineKm(coords[j - 1], coords[j]);
-        }
-
-        const props = {
-          _type: "activitySegment",
-          activityType: "TIMELINE_PATH",
-          distanceMeters: +(pathDist * 1000).toFixed(0),
-          distanceKm: +pathDist.toFixed(2),
-          waypointCount: coords.length,
-        };
-        if (startTime) props.startTimestamp = startTime;
-        if (endTime) props.endTimestamp = endTime;
-
-        features.push({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: coords },
-          properties: props,
-        });
-
-        totalDistanceTraveled += pathDist * 1000;
-        prevCoord = coords[coords.length - 1];
-      }
-    }
-  }
-
-  // Build sorted travel modes (sorted by distance covered, not count)
-  const topTravelModes = [...travelModeCounts.entries()]
-    .sort((a, b) => {
-      const distA = travelModeDistance.get(a[0]) || 0;
-      const distB = travelModeDistance.get(b[0]) || 0;
-      return distB - distA;
-    })
-    .map(([mode, count]) => ({
-      mode,
-      count,
-      distanceKm: +((travelModeDistance.get(mode) || 0) / 1000).toFixed(1),
-    }));
-
-  const geojson = { type: "FeatureCollection", features };
-
-  const stats = {
-    totalPlacesVisited,
-    totalDistanceTraveled, // meters
-    totalDistanceTraveledKm: +(totalDistanceTraveled / 1000).toFixed(2),
-    uniqueCities: [...placeNames],
-    uniqueCitiesCount: placeNames.size,
-    topTravelModes,
-    totalFeatures: features.length,
-    totalActivitySegments: totalActivitySegmentsCount,
-  };
-
-  return { geojson, stats };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Google Records.json Parser (backward compat)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parse Google Location History Records.json (locations array).
- * Preserved for backward compatibility with the older export format.
- */
-function parseGoogleRecordsJson(data) {
-  const features = [];
-
-  if (data.locations) {
-    for (const loc of data.locations) {
-      const lat = loc.latitudeE7
-        ? loc.latitudeE7 / E7_DIVISOR
-        : loc.latitude || loc.lat;
-      const lng = loc.longitudeE7
-        ? loc.longitudeE7 / E7_DIVISOR
-        : loc.longitude || loc.lng || loc.lon;
-      if (lat && lng) {
-        features.push({
-          type: "Feature",
-          properties: {
-            timestamp: loc.timestamp || loc.timestampMs,
-          },
-          geometry: {
-            type: "Point",
-            coordinates: [capPrecision(lng), capPrecision(lat)],
-          },
-        });
-      }
-    }
-  }
-
-  return { type: "FeatureCollection", features };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Stats Calculator (generic, for non-Semantic formats)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Calculate travel statistics from a generic GeoJSON FeatureCollection.
- * Used for GPX / KML / plain GeoJSON / Records.json.
- */
 export function calculateStats(geojson) {
-  if (!geojson || !geojson.features || geojson.features.length === 0) {
-    return null;
-  }
-
-  const points = [];
-  const lineCoords = [];
-  let timestamps = [];
-
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (!geom) continue;
-
-    if (geom.type === "Point") {
-      points.push(geom.coordinates);
-      if (feature.properties?.timestamp || feature.properties?.time) {
-        timestamps.push(
-          new Date(feature.properties.timestamp || feature.properties.time)
-        );
-      }
-    } else if (geom.type === "LineString") {
-      lineCoords.push(...geom.coordinates);
-      if (feature.properties?.coordTimes) {
-        timestamps.push(
-          ...feature.properties.coordTimes.map((t) => new Date(t))
-        );
-      }
-    } else if (geom.type === "MultiLineString") {
-      for (const line of geom.coordinates) {
-        lineCoords.push(...line);
-      }
-    } else if (geom.type === "Polygon") {
-      lineCoords.push(...geom.coordinates[0]);
-    }
-  }
-
-  const allCoords = [...points, ...lineCoords];
-
-  if (allCoords.length === 0) {
-    return null;
-  }
-
-  // Calculate bounding box
-  let minLat = Infinity,
-    maxLat = -Infinity,
-    minLng = Infinity,
-    maxLng = -Infinity;
-  let totalElevationGain = 0;
-  let maxElevation = -Infinity;
-  let minElevation = Infinity;
-
-  for (const coord of allCoords) {
-    const [lng, lat, ele] = coord;
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-    minLng = Math.min(minLng, lng);
-    maxLng = Math.max(maxLng, lng);
-    if (ele !== undefined) {
-      maxElevation = Math.max(maxElevation, ele);
-      minElevation = Math.min(minElevation, ele);
-    }
-  }
-
-  // Calculate total distance using Haversine formula
-  const pathCoords = lineCoords.length > 0 ? lineCoords : allCoords;
-  let totalDistance = 0;
-  for (let i = 1; i < pathCoords.length; i++) {
-    totalDistance += haversineKm(pathCoords[i - 1], pathCoords[i]);
-  }
-
-  // Elevation gain
-  for (let i = 1; i < pathCoords.length; i++) {
-    if (pathCoords[i][2] !== undefined && pathCoords[i - 1][2] !== undefined) {
-      const diff = pathCoords[i][2] - pathCoords[i - 1][2];
-      if (diff > 0) totalElevationGain += diff;
-    }
-  }
-
-  // Time range
-  timestamps = timestamps.filter((t) => !isNaN(t.getTime()));
-  timestamps.sort((a, b) => a - b);
-  const duration =
-    timestamps.length >= 2
-      ? timestamps[timestamps.length - 1] - timestamps[0]
-      : null;
-
-  // Unique countries/regions approximation based on coordinate spread
-  const center = [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
-
-  return {
-    totalPoints: allCoords.length,
-    totalFeatures: geojson.features.length,
-    totalDistance,
-    totalElevationGain: totalElevationGain > 0 ? totalElevationGain : null,
-    maxElevation: maxElevation !== -Infinity ? maxElevation : null,
-    minElevation: minElevation !== Infinity ? minElevation : null,
-    bounds: [
-      [minLat, minLng],
-      [maxLat, maxLng],
-    ],
-    center,
-    duration,
-    startTime: timestamps.length > 0 ? timestamps[0] : null,
-    endTime:
-      timestamps.length > 0 ? timestamps[timestamps.length - 1] : null,
-    avgSpeed:
-      duration && totalDistance
-        ? totalDistance / (duration / 1000 / 3600)
-        : null,
-  };
+  return selectHistory(createJourney(geojson)).stats;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Utility Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parse a Google Timeline string coordinate like "49.3817572°, 8.5769077°"
- * into a GeoJSON-ordered [lng, lat] array.
- * Also handles "geo:lat,lng" format and plain "lat, lng" without degree signs.
- *
- * @param {string} str
- * @returns {number[]|null} [lng, lat] or null
- */
-function parseLatLngString(input) {
-  if (!input) return null;
-
-  // Handle object inputs like { latLng: "geo:lat,lng" } or { latLng: "lat°, lng°" }
-  let str = input;
-  if (typeof input === "object") {
-    str = input.latLng || input.latlng || input.location || null;
-    if (!str || typeof str !== "string") return null;
-  }
-
-  if (typeof str !== "string") return null;
-
-  let cleaned = str.trim();
-
-  // Handle "geo:lat,lng" prefix
-  if (cleaned.startsWith("geo:")) {
-    cleaned = cleaned.slice(4);
-  }
-
-  // Remove degree symbols and whitespace, split on comma
-  const parts = cleaned.replace(/°/g, "").split(",").map((s) => s.trim());
-  if (parts.length < 2) return null;
-
-  const lat = parseFloat(parts[0]);
-  const lng = parseFloat(parts[1]);
-
-  if (isNaN(lat) || isNaN(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-
-  return [capPrecision(lng), capPrecision(lat)];
-}
-
-/**
- * Convert a latitudeE7 / longitudeE7 integer to a standard float.
- * Returns null if the input is falsy or not a number.
- */
-function convertE7(value) {
-  if (value == null || typeof value !== "number") return null;
-  return value / E7_DIVISOR;
-}
-
-/**
- * Cap a floating-point coordinate to exactly `COORD_PRECISION` decimal places.
- * Uses a multiplication trick to avoid toFixed string round-trip overhead.
- */
-function capPrecision(value) {
-  // 1e6 for 6 decimals
-  return Math.round(value * 1e6) / 1e6;
-}
-
-/**
- * Haversine formula: distance between two [lng, lat] coords in km.
- * Optimised to avoid object destructuring overhead in hot loops.
- */
-function haversineKm(a, b) {
-  const lat1 = a[1] * DEG_TO_RAD;
-  const lat2 = b[1] * DEG_TO_RAD;
-  const dLat = (b[1] - a[1]) * DEG_TO_RAD;
-  const dLng = (b[0] - a[0]) * DEG_TO_RAD;
-  const sinHalfDLat = Math.sin(dLat * 0.5);
-  const sinHalfDLng = Math.sin(dLng * 0.5);
-  const h =
-    sinHalfDLat * sinHalfDLat +
-    Math.cos(lat1) * Math.cos(lat2) * sinHalfDLng * sinHalfDLng;
-  return EARTH_RADIUS_KM * 2 * Math.asin(Math.sqrt(h));
+export async function parseFileAsync(file) {
+  return parseFile(file.name, await file.text());
 }

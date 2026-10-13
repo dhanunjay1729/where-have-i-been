@@ -79,7 +79,7 @@ const ACHIEVEMENT_DEFS = [
     description: "1,000+ data points recorded",
     icon: "📊",
     rarity: "common",
-    check: (stats, geojson) => (geojson?.features?.length || 0) >= 1000,
+    check: (stats, geojson) => (stats?.totalPoints || 0) >= 1000,
   },
   {
     id: "data_hoarder",
@@ -87,7 +87,7 @@ const ACHIEVEMENT_DEFS = [
     description: "10,000+ data points recorded",
     icon: "💾",
     rarity: "rare",
-    check: (stats, geojson) => (geojson?.features?.length || 0) >= 10000,
+    check: (stats, geojson) => (stats?.totalPoints || 0) >= 10000,
   },
   // Elevation achievements
   {
@@ -164,7 +164,7 @@ function getDistanceKm(stats) {
 }
 
 function getPlacesCount(stats) {
-  if (stats?.uniqueCitiesCount) return stats.uniqueCitiesCount;
+  if (stats?.uniquePlacesCount != null) return stats.uniquePlacesCount;
   if (stats?.totalPlacesVisited) return stats.totalPlacesVisited;
   return 0;
 }
@@ -199,7 +199,7 @@ export function computeAchievements(stats, geojson) {
 
   // Sort: legendary first
   earned.sort(
-    (a, b) => (RARITY_ORDER[a.rarity] || 99) - (RARITY_ORDER[b.rarity] || 99)
+    (a, b) => (RARITY_ORDER[a.rarity] ?? 99) - (RARITY_ORDER[b.rarity] ?? 99)
   );
 
   return earned;

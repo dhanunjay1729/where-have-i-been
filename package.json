@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node tests/journey.test.mjs"
   },
   "dependencies": {
     "@tmcw/togeojson": "^7.1.2",
