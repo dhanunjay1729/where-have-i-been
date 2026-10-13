@@ -6,7 +6,7 @@ A stunning, cyberpunk-themed travel visualization app that transforms your locat
 
 **🚀 Live Demo:** [https://where-have-i-been.vercel.app](https://where-have-i-been.vercel.app)
 
-**100% private** — all processing happens locally in your browser. No data is ever sent to any server.
+**Local history processing** — uploaded files are read in your browser and are never uploaded to a server. The basemap uses Mapbox network requests.
 
 ---
 
@@ -23,6 +23,9 @@ A stunning, cyberpunk-themed travel visualization app that transforms your locat
 ## ✨ Features
 
 - **Multi-format Support** — GPX, KML, GeoJSON, Google Timeline JSON, Google Takeout Semantic Location History, Google Records JSON
+- **Timeline Playback** — progressively reveal footprints with a time slider, play/pause, playback speed, and optional gap skipping
+- **Date Exploration** — filter by a date range, jump to a month/year, or open a day diary
+- **Traceable Statistics** — click a statistic to see how it is calculated; missing information is shown as unavailable
 - **Interactive Heatmap** — See where you spend the most time at a glance
 - **Route Visualization** — Gradient-colored travel routes with glow effects
 - **Clustered Points** — Intelligently grouped location markers that expand on zoom
@@ -106,14 +109,31 @@ app/
 ├── layout.js               # Root layout with SEO meta tags
 ├── globals.css             # Design system (cyberpunk theme, animations)
 ├── components/
+│   ├── JourneyExplorer.js  # Date range, playback, and synchronized map/statistics
+│   ├── Timeline.js         # Time slider, activity density, and playback controls
 │   ├── DropZone.js         # File upload with particle animation
 │   ├── MapView.js          # Mapbox GL map with all layers & interactions
 │   ├── Sidebar.js          # Stats, achievements, travel modes, map styles
 │   └── ErrorBoundary.js    # Graceful crash recovery
 └── utils/
+    ├── journey.js          # Normalized records, temporal clipping, and statistics
     ├── fileParser.js       # Multi-format parser (GPX, KML, GeoJSON, Google)
     └── achievements.js     # Travel achievement/badge system
 ```
+
+## Exploring time and understanding the numbers
+
+Choose **Try a sample journey** to explore a synthetic multi-day history without importing personal data. After importing your own file, select dates or a day in the sidebar. The slider represents elapsed time within that range. Dragging backward hides later footprints; playback reveals them progressively without moving the camera. **Fit journey** explicitly frames the selected range.
+
+- Times and calendar dates use the browser's timezone, displayed beside the date filters.
+- Point timestamps reveal routes incrementally. Routes with only start/end times appear when complete; partial route positions and reported distance totals are not invented.
+- Undated records appear in the full-history view and are excluded during date filtering and playback.
+- Separate paths never acquire connecting distance. Timed gaps over 30 minutes split a track. Raw isolated points and polygon outlines do not imply travelled distance.
+- Visits and unique places are separate. Place IDs identify distinct places, with exact coordinates rounded to six decimals as a fallback.
+- Google activity distance is excluded when it overlaps a timed recorded route, to avoid counting the same travel twice. This conservative policy may omit a reported activity's uncovered portion.
+- Recorded travel time combines route/activity intervals and excludes the gaps between them. It is not a claim of moving time or complete location coverage.
+
+Run the data regression suite with `npm test`, lint with `npm run lint`, and verify production compilation with `npm run build`.
 
 ## 🛡️ Privacy
 
@@ -121,7 +141,7 @@ This app is designed with privacy as a core principle:
 
 - **No server uploads** — All file parsing happens client-side in your browser
 - **No analytics** — No tracking scripts, no cookies, no data collection
-- **No external requests** — Only Mapbox tile requests for the map
+- **Map requests** — Mapbox provides styles, terrain, fonts, and tiles. Those requests can reveal the map area being viewed; uploaded history itself is not sent to Mapbox.
 - **Open source** — Inspect the code yourself
 
 ## 📄 License
@@ -131,17 +151,3 @@ MIT
 ---
 
 Built with [Next.js](https://nextjs.org), [Mapbox GL JS](https://mapbox.com), and a love for travel 🌏
-
-## Statistics validation
-
-Travel statistics preserve independent route boundaries, distinguish visits from unique places, and exclude overlapping activity distance estimates. Recorded travel time excludes gaps between activities; unavailable distance or speed is not invented. Place identity uses source place IDs, with coordinates as a fallback.
-
-Run the regression suite with `npm test`.
-
-## Explore your history by date
-
-Choose a date range, jump to a month or year, or select a recorded day to see its visit/activity diary. Maps and statistics follow the selected range. Dates use the browser timezone, shown beside the controls. Undated records remain available in the full-history view.
-
-## Progressive timeline playback
-
-Drag the timeline to progressively reveal dated footprints. Play/pause, speed controls, and optional empty-time skipping work within the selected date range. The camera stays fixed during scrubbing. Timed route points are revealed incrementally; routes without point timestamps appear only when complete.

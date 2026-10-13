@@ -1,0 +1,223 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.2422,
+          9.9658
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Fort Kochi",
+        "placeId": "demo-fort",
+        "arrivalTimestamp": "2025-12-03T09:00:00+05:30",
+        "departureTimestamp": "2025-12-03T09:30:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            76.2422,
+            9.9658
+          ],
+          [
+            76.2428,
+            9.967
+          ],
+          [
+            76.2439,
+            9.9691
+          ],
+          [
+            76.245,
+            9.9701
+          ]
+        ]
+      },
+      "properties": {
+        "name": "Along the waterfront",
+        "coordTimes": [
+          "2025-12-03T09:30:00+05:30",
+          "2025-12-03T09:40:00+05:30",
+          "2025-12-03T09:50:00+05:30",
+          "2025-12-03T10:00:00+05:30"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.245,
+          9.9701
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Waterfront stop",
+        "placeId": "demo-water",
+        "arrivalTimestamp": "2025-12-03T10:00:00+05:30",
+        "departureTimestamp": "2025-12-03T11:00:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0597,
+          10.0889
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Munnar",
+        "placeId": "demo-munnar",
+        "arrivalTimestamp": "2025-12-05T08:00:00+05:30",
+        "departureTimestamp": "2025-12-05T08:30:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.0597,
+            10.0889
+          ],
+          [
+            77.06,
+            10.09
+          ],
+          [
+            77.061,
+            10.091
+          ],
+          [
+            77.0621,
+            10.093
+          ]
+        ]
+      },
+      "properties": {
+        "name": "Morning in the hills",
+        "coordTimes": [
+          "2025-12-05T08:30:00+05:30",
+          "2025-12-05T08:40:00+05:30",
+          "2025-12-05T08:50:00+05:30",
+          "2025-12-05T09:00:00+05:30"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0621,
+          10.093
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Tea garden stop",
+        "placeId": "demo-tea",
+        "arrivalTimestamp": "2025-12-05T09:00:00+05:30",
+        "departureTimestamp": "2025-12-05T10:15:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.3388,
+          9.4981
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Alappuzha",
+        "placeId": "demo-alappuzha",
+        "arrivalTimestamp": "2025-12-07T14:00:00+05:30",
+        "departureTimestamp": "2025-12-07T14:30:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            76.3388,
+            9.4981
+          ],
+          [
+            76.338,
+            9.499
+          ],
+          [
+            76.3371,
+            9.5
+          ],
+          [
+            76.336,
+            9.501
+          ]
+        ]
+      },
+      "properties": {
+        "name": "An afternoon walk",
+        "coordTimes": [
+          "2025-12-07T14:30:00+05:30",
+          "2025-12-07T14:40:00+05:30",
+          "2025-12-07T14:50:00+05:30",
+          "2025-12-07T15:00:00+05:30"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.336,
+          9.501
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Backwater stop",
+        "placeId": "demo-backwater",
+        "arrivalTimestamp": "2025-12-07T15:00:00+05:30",
+        "departureTimestamp": "2025-12-07T16:00:00+05:30"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.2422,
+          9.9658
+        ]
+      },
+      "properties": {
+        "_type": "placeVisit",
+        "name": "Fort Kochi",
+        "placeId": "demo-fort",
+        "arrivalTimestamp": "2025-12-08T12:00:00+05:30",
+        "departureTimestamp": "2025-12-08T13:00:00+05:30"
+      }
+    }
+  ]
+}

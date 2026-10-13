@@ -651,3 +651,6 @@ body {
 .diary-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; }
 .diary-copy > span { display: block; color: #8fa7bc; font-size: 10px; margin-top: 4px; }
 .diary-event.ahead { opacity: .6; }
+.sample-journey-button { color: #9bdcd2; padding: 9px 16px; border: 1px solid #6bd5c52b; background: #6bd5c508; border-radius: 8px; font-size: 12px; cursor: pointer; }
+.sample-journey-button:hover { background: #6bd5c514; }
+.sample-journey-button:disabled { opacity: .5; cursor: default; }

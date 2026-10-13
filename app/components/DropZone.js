@@ -318,9 +318,17 @@ export default function DropZone({ onFileLoaded, onError }) {
           ))}
         </div>
 
+        <button className="sample-journey-button" disabled={isLoading} onClick={() => handleFile({
+          name: "sample-journey.geojson",
+          text: async () => {
+            const response = await fetch("/sample-journey.geojson");
+            if (!response.ok) throw new Error("Sample unavailable");
+            return response.text();
+          },
+        })}>Try a sample journey <span aria-hidden="true">↗</span></button>
         {/* How it works hint */}
         <p className="text-[10px] font-mono text-foreground/15 tracking-wider mt-2 text-center">
-          YOUR DATA STAYS ON YOUR DEVICE · 100% PRIVATE · NO SERVER UPLOADS
+          YOUR HISTORY IS PROCESSED ON YOUR DEVICE · NO FILE UPLOADS
         </p>
       </div>
 
