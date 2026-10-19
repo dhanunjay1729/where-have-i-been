@@ -4,9 +4,23 @@ Your travel history, mapped out. Explore the places you visited, revisit a parti
 
 **[Open the app →](https://where-have-i-been.vercel.app)**
 
-No account or installation needed. Choose **Try a sample journey** to explore the features before opening your own history.
+**Private by design.** Your history is processed in your browser, with no account and no file uploads.
 
-![Date filtering, travel statistics, and timeline playback showing a synthetic sample journey](docs/images/timeline-playback.jpg)
+Choose **Try a sample journey** to explore the features before opening your own history.
+
+![A full Timeline export showing intercity routes, visit clusters, statistics, and the playback timeline](docs/images/travel-history-overview.jpg)
+
+## Explore at every scale
+
+The screenshots below use a real Google Timeline export. Zoom out to see the whole journey, then zoom in to explore the routes and places within a city.
+
+**Bengaluru · city view**
+
+![Bengaluru city-wide routes and clustered visits from a real Timeline export](docs/images/bengaluru-city.jpg)
+
+**Bengaluru · a closer look**
+
+![Detailed Bengaluru routes around Indiranagar, Mahadevapura, and Marathahalli](docs/images/bengaluru-detail.jpg)
 
 ## Watch your world grow
 
@@ -51,7 +65,7 @@ For Google Timeline, export the history from your phone and open the resulting J
 
 Importing a file does not connect your Google account or enable automatic syncing. To explore a newer export, choose **New file**.
 
-## Your history stays on your device
+## Private by design
 
 Your imported history is parsed and explored in your browser. The app does not upload the file, require an account, or save your history in a server database. Refreshing the page clears the imported session.
 
