@@ -1,153 +1,71 @@
-# 🌍 WHERE HAVE I BEEN
+# 🌍 Where Have I Been
 
-_Honestly, this was just a really fun project! I vibe-coded the whole thing because I just wanted to make an app that tracks all my footprints all over the world._
+Your travel history, mapped out. Explore the places you visited, revisit a particular day, and watch your footprints appear through time.
 
-A stunning, cyberpunk-themed travel visualization app that transforms your location history into an interactive map experience. Upload your travel data files and watch your journeys come alive with heatmaps, route animations, and rich statistics.
+**[Open the app →](https://where-have-i-been.vercel.app)**
 
-**🚀 Live Demo:** [https://where-have-i-been.vercel.app](https://where-have-i-been.vercel.app)
+No account or installation needed. Choose **Try a sample journey** to explore the features before opening your own history.
 
-**Local history processing** — uploaded files are read in your browser and are never uploaded to a server. The basemap uses Mapbox network requests.
+![Date filtering, travel statistics, and timeline playback showing a synthetic sample journey](docs/images/timeline-playback.jpg)
 
----
+## Watch your world grow
 
-## 📸 Screenshots
+An entire location history can be overwhelming. The timeline lets you explore it a little at a time:
 
-![Map View Placeholder](docs/images/map-view.png)
-![Map View Placeholder](docs/images/map-view2.png)
+- **Drag through time.** Move forward to reveal later footprints, or backward to revisit an earlier moment.
+- **Play your journey.** Adjust playback speed and optionally skip stretches with no recorded activity.
+- **Focus on a trip.** Choose a date range or jump straight to a month or year. The map and statistics update together.
+- **Revisit a day.** Open its diary to see visits and activities in order. Select an entry to jump to that moment.
 
-![Stats Sidebar Placeholder](docs/images/sidebar-stats.png)
-![Stats Sidebar Placeholder](docs/images/sidebar-stats2.png)
+The camera stays steady while you scrub. Use **Fit journey** whenever you want to frame the selected range again.
 
----
+## More than a trail on a map
 
-## ✨ Features
+Explore recorded locations with heatmaps, clustered markers, and routes. Switch between Dark, Satellite, Streets, and Terrain views, or tilt the map to see the landscape in 3D.
 
-- **Multi-format Support** — GPX, KML, GeoJSON, Google Timeline JSON, Google Takeout Semantic Location History, Google Records JSON
-- **Timeline Playback** — progressively reveal footprints with a time slider, play/pause, playback speed, and optional gap skipping
-- **Date Exploration** — filter by a date range, jump to a month/year, or open a day diary
-- **Traceable Statistics** — click a statistic to see how it is calculated; missing information is shown as unavailable
-- **Interactive Heatmap** — See where you spend the most time at a glance
-- **Route Visualization** — Gradient-colored travel routes with glow effects
-- **Clustered Points** — Intelligently grouped location markers that expand on zoom
-- **3D Terrain** — Tilt the map to see terrain elevation with atmospheric sky
-- **4 Map Styles** — Dark, Satellite, Streets, Terrain — switch anytime
-- **Travel Statistics** — Distance, places visited, trips, duration, elevation, speed
-- **Travel Mode Breakdown** — Visual chart showing your transport modes (driving, walking, cycling, etc.)
-- **Achievement System** — Earn badges for travel milestones (distance, places, elevation, multimodal travel)
-- **Rich Popups** — Click any point to see visit details, duration, and timestamps
-- **Cyberpunk Aesthetic** — Neon glows, scanlines, animated particles, glassmorphism
-- **Fully Responsive** — Works on desktop and mobile with collapsible sidebar
-- **Keyboard Shortcuts** — Press `Esc` to toggle sidebar
+The sidebar brings the details together:
 
-## 🚀 Getting Started
+- Recorded distance and travel time.
+- Visits, unique places, route sections, and activity segments.
+- Transport modes when your export includes them.
+- Travel milestones based on the available data.
 
-### Prerequisites
+Click a statistic to see how it is calculated. Separate tracks are not joined to invent extra distance, returning to a place counts as another visit, and activity segments are distinguished from whole trips. Values the file cannot support appear as **Unavailable**.
 
-- Node.js 18+
-- A [Mapbox](https://mapbox.com) access token (free tier is sufficient)
+Works on desktop and mobile. Press **Esc** to open or close the sidebar.
 
-### Installation
+## Bring your history
 
-```bash
-# Clone the repository
-git clone https://github.com/your-username/where-have-i-been.git
-cd where-have-i-been
+Open the [live app](https://where-have-i-been.vercel.app), then choose a file or drag it onto the page. Your file is read locally in the browser.
 
-# Install dependencies
-npm install
+| Your data | File type |
+| --- | --- |
+| Google Maps Timeline export | `.json` with `semanticSegments` |
+| Older Google Takeout Semantic Location History | `.json` with `timelineObjects` |
+| Google location records | `.json` with a `locations` array |
+| GPS tracks, such as hiking or cycling recordings | `.gpx` |
+| Google Earth or other KML exports | `.kml` |
+| Geographic features and routes | `.geojson` or GeoJSON-formatted `.json` |
 
-# Create environment file
-cp .env.example .env.local
-# Edit .env.local and add your Mapbox token
+For Google Timeline, export the history from your phone and open the resulting JSON file in the app. See [Google's Timeline help](https://support.google.com/maps/answer/6258979) for export instructions for your device.
 
-# Start development server
-npm run dev
-```
+Importing a file does not connect your Google account or enable automatic syncing. To explore a newer export, choose **New file**.
 
-### Environment Variables
+## Your history stays on your device
 
-| Variable                          | Description                 | Required |
-| --------------------------------- | --------------------------- | -------- |
-| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Your Mapbox GL access token | ✅       |
+Your imported history is parsed and explored in your browser. The app does not upload the file, require an account, or save your history in a server database. Refreshing the page clears the imported session.
 
-> **Note:** Keep your token private and rotate it immediately if you ever accidentally commit it.
+**The map still uses the internet.** Mapbox supplies map styles, tiles, fonts, and terrain. Those requests can reveal the area being viewed; the imported history itself is not sent to Mapbox.
 
-### Building for Production
+## A few things to know
 
-```bash
-npm run build
-npm start
-```
-
-## 📁 Supported File Formats
-
-| Format              | Extension  | Description                                               |
-| ------------------- | ---------- | --------------------------------------------------------- |
-| **GPX**             | `.gpx`     | GPS Exchange Format (Strava, Garmin, etc.)                |
-| **KML**             | `.kml`     | Google Earth / Google My Maps                             |
-| **GeoJSON**         | `.geojson` | Standard geographic JSON                                  |
-| **Google Timeline** | `.json`    | Modern Google Timeline export (2024+, `semanticSegments`) |
-| **Google Takeout**  | `.json`    | Legacy Semantic Location History (`timelineObjects`)      |
-| **Google Records**  | `.json`    | Raw location records (`locations` array)                  |
-
-## 📍 Example: Export Google Timeline from your phone
-
-Here’s one simple way to grab your location history and upload it:
-
-1. On your phone, open **Google Maps** → tap your profile photo → **Your Timeline**.
-2. Tap the **⋮** menu → **Settings & privacy** → **Export Timeline data**.
-3. Choose a date range, then export the file (you’ll get a `.json`).
-4. Upload that file directly into this app’s drop zone.
-
-> The export typically contains `semanticSegments`, which the app supports out of the box.
-
-## 🏗️ Architecture
-
-```
-app/
-├── page.js                 # Main app entry with state management
-├── layout.js               # Root layout with SEO meta tags
-├── globals.css             # Design system (cyberpunk theme, animations)
-├── components/
-│   ├── JourneyExplorer.js  # Date range, playback, and synchronized map/statistics
-│   ├── Timeline.js         # Time slider, activity density, and playback controls
-│   ├── DropZone.js         # File upload with particle animation
-│   ├── MapView.js          # Mapbox GL map with all layers & interactions
-│   ├── Sidebar.js          # Stats, achievements, travel modes, map styles
-│   └── ErrorBoundary.js    # Graceful crash recovery
-└── utils/
-    ├── journey.js          # Normalized records, temporal clipping, and statistics
-    ├── fileParser.js       # Multi-format parser (GPX, KML, GeoJSON, Google)
-    └── achievements.js     # Travel achievement/badge system
-```
-
-## Exploring time and understanding the numbers
-
-Choose **Try a sample journey** to explore a synthetic multi-day history without importing personal data. After importing your own file, select dates or a day in the sidebar. The slider represents elapsed time within that range. Dragging backward hides later footprints; playback reveals them progressively without moving the camera. **Fit journey** explicitly frames the selected range.
-
-- Times and calendar dates use the browser's timezone, displayed beside the date filters.
-- Point timestamps reveal routes incrementally. Routes with only start/end times appear when complete; partial route positions and reported distance totals are not invented.
-- Undated records appear in the full-history view and are excluded during date filtering and playback.
-- Separate paths never acquire connecting distance. Timed gaps over 30 minutes split a track. Raw isolated points and polygon outlines do not imply travelled distance.
-- Visits and unique places are separate. Place IDs identify distinct places, with exact coordinates rounded to six decimals as a fallback.
-- Google activity distance is excluded when it overlaps a timed recorded route, to avoid counting the same travel twice. This conservative policy may omit a reported activity's uncovered portion.
-- Recorded travel time combines route/activity intervals and excludes the gaps between them. It is not a claim of moving time or complete location coverage.
-
-Run the data regression suite with `npm test`, lint with `npm run lint`, and verify production compilation with `npm run build`.
-
-## 🛡️ Privacy
-
-This app is designed with privacy as a core principle:
-
-- **No server uploads** — All file parsing happens client-side in your browser
-- **No analytics** — No tracking scripts, no cookies, no data collection
-- **Map requests** — Mapbox provides styles, terrain, fonts, and tiles. Those requests can reveal the map area being viewed; uploaded history itself is not sent to Mapbox.
-- **Open source** — Inspect the code yourself
-
-## 📄 License
-
-MIT
+- **Playback depends on timestamps.** Routes with point-by-point times appear progressively. Routes with only start and end times appear when complete, rather than showing an invented position along the way.
+- **Undated data is still viewable.** It appears in the full-history view, but is hidden during date filtering and playback. Files with no timestamps can be explored as a complete map.
+- **Dates use your browser's timezone.** The timezone is shown beside the date controls.
+- **The map reflects recorded coverage.** Gaps in an export remain gaps. Raw location points alone do not establish a continuous route, and recorded travel time is not necessarily time spent moving.
 
 ---
 
-Built with [Next.js](https://nextjs.org), [Mapbox GL JS](https://mapbox.com), and a love for travel 🌏
+Built with [Next.js](https://nextjs.org), [React](https://react.dev), [Mapbox GL JS](https://www.mapbox.com/mapbox-gljs), and [Tailwind CSS](https://tailwindcss.com).
+
+MIT license.
